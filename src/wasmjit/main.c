@@ -274,7 +274,8 @@ static int get_static_bump(const char *filename, uint32_t *static_bump)
 	if ((result == LONG_MIN || result == LONG_MAX) && errno == ERANGE)
 		goto error;
 
-	if (result < 0 || result > UINT32_MAX)
+	assert(result >= 0);
+	if (result > UINT32_MAX)
 		goto error;
 
 	*static_bump = result;
