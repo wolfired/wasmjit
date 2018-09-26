@@ -2693,7 +2693,7 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 							     emmsg.msg_name,
 							     emmsg.msg_namelen)) {
 				ret = -EFAULT;
-				goto error;
+				goto error2;
 			}
 
 			msg.msg_name = base + emmsg.msg_name;
