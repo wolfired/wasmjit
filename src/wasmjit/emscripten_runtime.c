@@ -159,6 +159,44 @@ static int wasmjit_emscripten_check_range(struct MemInst *meminst,
 	return ret <= meminst->size;
 }
 
+/* use this whenever going to read from an address controlled by user input,
+   this defeats "branch check bypass" attack from spectre v1 */
+static int wasmjit_emscripten_check_range_sanitize(struct MemInst *meminst,
+						   uint32_t *user_ptr,
+						   size_t extent)
+{
+	size_t ret;
+	uint32_t mask;
+	uint8_t toret;
+
+	if (__builtin_add_overflow(*user_ptr, extent, &ret))
+		return 0;
+
+#ifdef __x86_64__
+	__asm__("cmp %3, %2\n"
+		"setbe %1\n"
+		"sbb %0, %0\n"
+		: "=r" (mask), "=r" (toret)
+		: "r" (ret), "r" (meminst->size)
+		: "cc");
+#else
+	{
+		int toret2;
+		toret = ret <= meminst->size;
+
+		toret2 = toret & 0x1;
+		/* NB: don't assume toret2's value,
+		   forces actual computation of mask */
+		__asm__ ("" : "=r" (toret2) : "0" (toret2));
+		mask = ((uint32_t)0 - toret2);
+	}
+#endif
+
+	*user_ptr &= mask;
+	return toret;
+
+}
+
 static size_t wasmjit_emscripten_copy_to_user(struct MemInst *meminst,
 					      uint32_t user_dest_ptr,
 					      void *src,
@@ -177,7 +215,8 @@ static size_t wasmjit_emscripten_copy_from_user(struct MemInst *meminst,
 						uint32_t user_src_ptr,
 						size_t src_size)
 {
-	if (!wasmjit_emscripten_check_range(meminst, user_src_ptr, src_size)) {
+	if (!wasmjit_emscripten_check_range_sanitize(meminst, &user_src_ptr,
+						     src_size)) {
 		return src_size;
 	}
 
@@ -192,9 +231,13 @@ static int _wasmjit_emscripten_check_string(struct FuncInst *funcinst,
 	struct MemInst *meminst = wasmjit_emscripten_get_mem_inst(funcinst);
 	size_t len = 0;
 
-	while (user_ptr + len < meminst->size && len < max) {
-		if (!*(meminst->data + user_ptr + len))
+	while (wasmjit_emscripten_check_range_sanitize(meminst,
+						       &user_ptr,
+						       1) &&
+	       len < max) {
+		if (!*(meminst->data + user_ptr))
 			return 1;
+		user_ptr += 1;
 		len += 1;
 	}
 
@@ -206,6 +249,11 @@ static int _wasmjit_emscripten_check_string(struct FuncInst *funcinst,
 	wasmjit_emscripten_check_range(wasmjit_emscripten_get_mem_inst(funcinst), \
 				       user_ptr,			\
 				       src_size)			\
+
+#define _wasmjit_emscripten_check_range_sanitize(funcinst, user_ptr, src_size) \
+	wasmjit_emscripten_check_range_sanitize(wasmjit_emscripten_get_mem_inst(funcinst), \
+						user_ptr,		\
+						src_size)		\
 
 #define _wasmjit_emscripten_copy_to_user(funcinst, user_dest_ptr, src, src_size) \
 	wasmjit_emscripten_copy_to_user(wasmjit_emscripten_get_mem_inst(funcinst), \
@@ -676,7 +724,7 @@ uint32_t wasmjit_emscripten__emscripten_memcpy_big(uint32_t dest, uint32_t src, 
 {
 	char *base = wasmjit_emscripten_get_base_address(funcinst);
 	if (!_wasmjit_emscripten_check_range(funcinst, dest, num) ||
-	    !_wasmjit_emscripten_check_range(funcinst, src, num)) {
+	    !_wasmjit_emscripten_check_range_sanitize(funcinst, &src, num)) {
 		wasmjit_trap(WASMJIT_TRAP_MEMORY_OVERFLOW);
 	}
 	memcpy(dest + base, src + base, num);
@@ -1170,20 +1218,37 @@ static long write_sockaddr(struct sockaddr_storage *ss, socklen_t ssize,
 
 #ifdef SAME_SOCKADDR
 
-static long finish_bindlike(long (*bindlike)(int, const struct sockaddr *, socklen_t),
-			    int fd, void *addr, size_t len)
+static long finish_bindlike(struct FuncInst *funcinst,
+			    long (*bindlike)(int, const struct sockaddr *, socklen_t),
+			    int fd, uint32_t addr, uint32_t len)
 {
-	return bindlike(fd, addr, len);
+	char *base;
+
+	/* no need to sanitize address, host kernel will do that for us */
+	if (!_wasmjit_emscripten_check_range(funcinst, addr, len))
+		return -EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	return bindlike(fd, (void *)(base + addr), len);
 }
 
 #else
 
 /* need to byte swap and adapt sockaddr to current platform */
-static long finish_bindlike(long (*bindlike)(int, const struct sockaddr *, socklen_t),
-			    int fd, char *addr, size_t len)
+static long finish_bindlike(struct FuncInst *funcinst,
+			    long (*bindlike)(int, const struct sockaddr *, socklen_t),
+			    int fd, uint32_t uaddr, uint32_t len)
 {
 	struct sockaddr_storage ss;
 	size_t ptr_size;
+	char *addr;
+
+	if (!_wasmjit_emscripten_check_range_sanitize(funcinst, &uaddr,
+						      len))
+		return -EFAULT;
+
+	addr = wasmjit_emscripten_get_base_address(funcinst) + uaddr;
 
 	if (read_sockaddr(&ss, &ptr_size, addr, len))
 		return -EINVAL;
@@ -1407,20 +1472,38 @@ static int32_t convert_recvmsg_msg_flags(int flags) {
 
 #ifdef SAME_SOCKADDR
 
-static long finish_sendto(int32_t fd,
+static long finish_sendto(struct FuncInst *funcinst,
+			  int32_t fd,
 			  const void *buf, uint32_t len,
 			  int flags,
-			  const void *dest_addr, uint32_t addrlen)
+			  uint32_t dest_addr, uint32_t addrlen)
 {
-	return sys_sendto(fd, buf, len, flags, dest_addr, addrlen);
+	void *real_dest_addr;
+
+	if (dest_addr) {
+		char *base;
+		/* no need to sanitize address after jmp,
+		   host kernel will do that for us */
+		if (!_wasmjit_emscripten_check_range(funcinst,
+						     dest_addr,
+						     addrlen))
+			return -EFAULT;
+		base = wasmjit_emscripten_get_base_address(funcinst);
+		real_dest_addr = base + dest_addr;
+	} else {
+		real_dest_addr = NULL;
+	}
+
+	return sys_sendto(fd, buf, len, flags, real_dest_addr, addrlen);
 }
 
 #else
 
-static long finish_sendto(int32_t fd,
+static long finish_sendto(struct FuncInst *funcinst,
+			  int32_t fd,
 			  const void *buf, uint32_t len,
 			  int flags2,
-			  const void *dest_addr, uint32_t addrlen)
+			  uint32_t dest_addr, uint32_t addrlen)
 {
 
 	struct sockaddr_storage ss;
@@ -1428,8 +1511,14 @@ static long finish_sendto(int32_t fd,
 	void *saddr;
 
 	if (dest_addr) {
+		char *base;
+		if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
+							      &dest_addr,
+							      addrlen))
+			return -EFAULT;
+		base = wasmjit_emscripten_get_base_address(funcinst);
 		/* convert dest_addr to form understood by sys_sendto */
-		if (read_sockaddr(&ss, &ptr_size, dest_addr, addrlen))
+		if (read_sockaddr(&ss, &ptr_size, base + dest_addr, addrlen))
 			return -EINVAL;
 		saddr = &ss;
 	} else {
@@ -1908,9 +1997,10 @@ static long copy_cmsg(struct FuncInst *funcinst,
 	controlptr = control;
 	while (!(controlptr > controlmax - EM_CMSG_ALIGN(sizeof(struct em_cmsghdr)))) {
 		struct em_cmsghdr user_cmsghdr;
-		size_t cur_len, buf_len, new_len;
+		size_t buf_len, new_len;
 		char *src_buf_base;
 		unsigned char *dest_buf_base;
+		uint32_t cur_len;
 
 		assert(cmsg);
 
@@ -1926,11 +2016,23 @@ static long copy_cmsg(struct FuncInst *funcinst,
 		cur_len = EM_CMSG_ALIGN(sizeof(struct em_cmsghdr));
 		buf_len = user_cmsghdr.cmsg_len - cur_len;
 
+		cur_len += controlptr;
+
+		/* do a redundant check, to sanitize cur_len */
+		{
+			int ret;
+			ret = _wasmjit_emscripten_check_range_sanitize(funcinst,
+								       &cur_len,
+								       buf_len);
+			assert(ret);
+			(void)ret;
+		}
+
 		/* kernel sources differ from libc sources on where
 		   the buffer starts, but in any case the correct code
 		   is the aligned offset from the beginning,
 		   i.e. what (struct cmsghdr *)a + 1 means */
-		src_buf_base = base + controlptr + cur_len;
+		src_buf_base = base + cur_len;
 		dest_buf_base = CMSG_DATA(cmsg);
 
 		switch (user_cmsghdr.cmsg_level) {
@@ -2141,21 +2243,46 @@ static long write_cmsg(char *base,
 
 #ifdef SAME_SOCKADDR
 
-static long finish_sendmsg(int fd, user_msghdr_t *msg, int flags)
+static long finish_sendmsg(struct FuncInst *funcinst,
+			   int fd, user_msghdr_t *msg, int flags)
 {
+	uint32_t msg_name = (uintptr_t) msg->msg_name;
+
+	/* host kernel will take care of sanitizing msg_name */
+	if (!_wasmjit_emscripten_check_range(funcinst,
+					     msg_name,
+					     msg->msg_namelen)) {
+		return -EFAULT;
+	}
+
+	msg->msg_name = wasmjit_emscripten_get_base_address(funcinst) + msg_name;
+
 	return sys_sendmsg(fd, msg, flags);
 }
 
 #else
 
-static long finish_sendmsg(int fd, user_msghdr_t *msg, int flags)
+static long finish_sendmsg(struct FuncInst *funcinst,
+			   int fd, user_msghdr_t *msg, int flags)
 {
 	struct sockaddr_storage ss;
 	size_t ptr_size;
 
 	/* convert msg_name to form understood by sys_sendmsg */
 	if (msg->msg_name) {
-		if (read_sockaddr(&ss, &ptr_size, msg->msg_name, msg->msg_namelen))
+		char *base;
+		uint32_t msg_name = (uintptr_t) msg->msg_name;
+
+		/* host kernel will take care of sanitizing msg_name */
+		if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
+							      &msg_name,
+							      msg->msg_namelen)) {
+			return -EFAULT;
+		}
+
+		base = wasmjit_emscripten_get_base_address(funcinst)
+
+		if (read_sockaddr(&ss, &ptr_size, base + msg_name, msg->msg_namelen))
 			return -EINVAL;
 		msg->msg_name = (void *)&ss;
 		msg->msg_namelen = ptr_size;
@@ -2243,29 +2370,22 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 	}
 	case 2: // bind
 	case 3: { // connect
-		char *base;
-
 		LOAD_ARGS(funcinst, ivargs, 3,
 			  int32_t, fd,
 			  uint32_t, addrp,
 			  uint32_t, addrlen);
 
-		if (!_wasmjit_emscripten_check_range(funcinst,
-						     args.addrp,
-						     args.addrlen))
-			return -EM_EFAULT;
-
-		base = wasmjit_emscripten_get_base_address(funcinst);
-
 		if (icall == 2) {
-			ret = finish_bindlike(sys_bind,
+			ret = finish_bindlike(funcinst,
+					      sys_bind,
 					      args.fd,
-					      base + args.addrp, args.addrlen);
+					      args.addrp, args.addrlen);
 		} else {
 			assert(icall == 3);
-			ret = finish_bindlike(sys_connect,
+			ret = finish_bindlike(funcinst,
+					      sys_connect,
 					      args.fd,
-					      base + args.addrp, args.addrlen);
+					      args.addrp, args.addrlen);
 		}
 		break;
 	}
@@ -2346,13 +2466,6 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 						     args.length))
 			return -EM_EFAULT;
 
-		if (args.addrp) {
-			if (!_wasmjit_emscripten_check_range(funcinst,
-							     args.addrp,
-							     args.addrlen))
-				return -EM_EFAULT;
-		}
-
 		base = wasmjit_emscripten_get_base_address(funcinst);
 
 		/* if there are flags we don't understand, then return invalid flag */
@@ -2361,11 +2474,12 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 
 		flags2 = convert_sendto_flags(args.flags);
 
-		ret = finish_sendto(args.fd,
+		ret = finish_sendto(funcinst,
+				    args.fd,
 				    base + args.message,
 				    args.length,
 				    flags2,
-				    args.addrp ? base + args.addrp : NULL,
+				    args.addrp,
 				    args.addrlen);
 		break;
 	}
@@ -2429,9 +2543,9 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 			  uint32_t, optval,
 			  uint32_t, optlen);
 
-		if (!_wasmjit_emscripten_check_range(funcinst,
-						     args.optval,
-						     args.optlen))
+		if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
+							      &args.optval,
+							      args.optlen))
 			return -EM_EFAULT;
 
 		base = wasmjit_emscripten_get_base_address(funcinst);
@@ -2487,7 +2601,6 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 			return -EM_EINVAL;
 
 		{
-			char *base;
 			user_msghdr_t msg;
 
 			LOAD_ARGS_CUSTOM(emmsg, funcinst, args.msg, 7,
@@ -2502,23 +2615,13 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 			msg.msg_iov = NULL;
 			msg.msg_control = NULL;
 
-			base = wasmjit_emscripten_get_base_address(funcinst);
-
 			if (emmsg.name) {
-				if (!_wasmjit_emscripten_check_range(funcinst,
-								     emmsg.name,
-								     emmsg.namelen)) {
-					ret = -EFAULT;
-					goto error;
-				}
-
-				msg.msg_name = base + emmsg.name;
+				msg.msg_name = (void *) (uintptr_t) emmsg.name;
 			} else {
 				msg.msg_name = NULL;
 			}
 
 			msg.msg_namelen = emmsg.namelen;
-
 
 			ret = copy_iov(funcinst, emmsg.iov, emmsg.iovlen, &msg.msg_iov);
 			if (ret) {
@@ -2543,7 +2646,7 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 			/* unused in sendmsg */
 			msg.msg_flags = 0;
 
-			ret = finish_sendmsg(args.fd, &msg,
+			ret = finish_sendmsg(funcinst, args.fd, &msg,
 					     convert_sendto_flags(args.flags));
 
 		error:
