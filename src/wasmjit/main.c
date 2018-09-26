@@ -231,12 +231,30 @@ static int dump_wasm_module(const char *filename)
 	return res;
 }
 
+static int lpow(long base, long exp, long *out)
+{
+	*out = 1;
+
+	while (1) {
+		if (exp & 1)
+			if (__builtin_mul_overflow(*out, base, out))
+				return -1;
+		exp >>= 1;
+		if (!exp)
+			break;
+		if (__builtin_mul_overflow(base, base, &base))
+			return -1;
+	}
+
+	return 0;
+}
+
 static int get_static_bump(const char *filename, uint32_t *static_bump)
 {
 	char *js_path = NULL, *filebuf = NULL, *filebuf2 = NULL;
 	size_t fnlen, filesize;
 	regex_t re;
-	regmatch_t pmatch[4];
+	regmatch_t pmatch[5];
 	int ret, compiled = 0;
 	long result;
 
@@ -260,7 +278,7 @@ static int get_static_bump(const char *filename, uint32_t *static_bump)
 	memcpy(filebuf2, filebuf, filesize);
 	filebuf2[filesize] = '\0';
 
-	ret = regcomp(&re, "(^|;|\n) *var +STATIC_BUMP *= *([0-9]+) *(;|$|\n)", REG_EXTENDED);
+	ret = regcomp(&re, "(^|;|\n) *var +STATIC_BUMP *= *([0-9]+)([eE][0-9]+)? *(;|$|\n)", REG_EXTENDED);
 	if (ret)
 		goto error;
 
@@ -273,6 +291,21 @@ static int get_static_bump(const char *filename, uint32_t *static_bump)
 	result = strtol(filebuf2 + pmatch[2].rm_so, NULL, 10);
 	if ((result == LONG_MIN || result == LONG_MAX) && errno == ERANGE)
 		goto error;
+
+	if (pmatch[3].rm_so >= 0) {
+		long exponent, coefficient;
+		exponent = strtol(filebuf2 + pmatch[3].rm_so + 1, NULL, 10);
+		if ((exponent == LONG_MIN || exponent == LONG_MAX) && errno == ERANGE)
+			goto error;
+
+		assert(exponent >= 0);
+
+		if (lpow(10, exponent, &coefficient))
+			goto error;
+
+		if (__builtin_mul_overflow(coefficient, result, &result))
+			goto error;
+	}
 
 	assert(result >= 0);
 	if (result > UINT32_MAX)
