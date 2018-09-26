@@ -1128,6 +1128,7 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 	case OPCODE_I64_STORE8: {
 		const struct LoadStoreExtra *extra;
 		size_t mem_size;
+		uint32_t real_offset;
 
 		switch (instruction->opcode) {
 		case OPCODE_I64_LOAD:
@@ -1232,13 +1233,21 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 			goto error;
 		OUTS("\x5e");
 
-		if (mem_size + extra->offset != 0) {
+		if (__builtin_add_overflow(mem_size,
+					   extra->offset,
+					   &real_offset))
+			goto error;
+
+		if (real_offset != 0) {
 			/* LOGIC: ea += memarg.offset + 4 */
+
+			/* can't encode this into the following instruction */
+			if (real_offset >= 0x80000000)
+				goto error;
 
 			/* add <VAL>, %rsi */
 			OUTS("\x48\x81\xc6");
-			encode_le_uint32_t(mem_size +
-					   extra->offset, buf);
+			encode_le_uint32_t(real_offset, buf);
 			if (!output_buf(output, buf, sizeof(uint32_t)))
 				goto error;
 		}
