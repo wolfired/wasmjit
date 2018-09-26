@@ -11,7 +11,7 @@ user-kernel transition overhead, as well as scheduling overheads from
 swapping page tables.  This results in a significant performance
 increase for syscall-bound programs like web servers or FUSE file
 systems. The performance increase is more pronounced in a
-post-Spectre/Meltdown world due to PTI overhead. Check it out:
+post-Meltdown world due to PTI overhead. Check it out:
 
 ![example wasmjit run](https://raw.githubusercontent.com/rianhunter/wasmjit/master/wasmjit.png)
 
