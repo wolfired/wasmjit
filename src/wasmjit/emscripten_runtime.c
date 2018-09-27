@@ -171,7 +171,7 @@ static int wasmjit_emscripten_check_range_sanitize(struct MemInst *meminst,
 	if (__builtin_add_overflow(*user_ptr, extent, &ret))
 		return 0;
 
-	WASMJIT_CHECK_RANGE_SANITIZE(toret, ret <= meminst->size, user_ptr);
+	WASMJIT_CHECK_RANGE_SANITIZE(&toret, ret <= meminst->size, user_ptr);
 
 	return toret;
 }

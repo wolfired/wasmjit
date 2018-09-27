@@ -178,7 +178,7 @@ struct FuncInst *wasmjit_resolve_indirect_call(const struct TableInst *tableinst
 	struct FuncInst *funcinst;
 	int toret;
 
-	WASMJIT_CHECK_RANGE_SANITIZE(toret, idx < tableinst->length, &idx);
+	WASMJIT_CHECK_RANGE_SANITIZE(&toret, idx < tableinst->length, &idx);
 	if (!toret)
 		wasmjit_trap(WASMJIT_TRAP_TABLE_OVERFLOW);
 
