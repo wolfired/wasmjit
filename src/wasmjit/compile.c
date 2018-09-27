@@ -634,7 +634,7 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 			goto error;
 
 		/* cmp $const, %eax */
-		OUTS("\x48\x3d");
+		OUTS("\x3d");
 		/* const = instruction->data.br_table.n_labelidxs */
 		encode_le_uint32_t(instruction->data.br_table.n_labelidxs,
 				   buf);
