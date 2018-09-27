@@ -645,6 +645,12 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 		OUTS("\x0f\x83\x90\x90\x90\x90");
 		default_branch_offset = output->n_elts;
 
+		/* NB: BCB mitigation */
+		/* sbb %ecx, %ecx */
+		OUTS("\x19\xc9");
+		/* and %ecx, %eax */
+		OUTS("\x21\xc8");
+
 		/* lea 7 + INDIRECT_JUMP_SIZE(flags)(%rip), %rdx */
 		OUTS("\x48\x8d\x15");
 		OUTB(0);
