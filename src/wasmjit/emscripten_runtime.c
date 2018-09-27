@@ -2280,7 +2280,7 @@ static long finish_sendmsg(struct FuncInst *funcinst,
 			return -EFAULT;
 		}
 
-		base = wasmjit_emscripten_get_base_address(funcinst)
+		base = wasmjit_emscripten_get_base_address(funcinst);
 
 		if (read_sockaddr(&ss, &ptr_size, base + msg_name, msg->msg_namelen))
 			return -EINVAL;
