@@ -441,6 +441,52 @@ static int emit_indirect_call(struct SizedBuffer *output,
 	return 0;
 }
 
+#define WASMJIT_INTEL_JUMP_RETPOLINE_SIZE (5 + 2 + 3 + 2 + 4 + 1)
+#define WASMJIT_AMD_JUMP_RETPOLINE_SIZE (3 + 2)
+
+
+#define INDIRECT_JUMP_SIZE(flags) (((flags) & WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE) ? WASMJIT_INTEL_JUMP_RETPOLINE_SIZE : ((flags) & WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE) ? WASMJIT_AMD_JUMP_RETPOLINE_SIZE : 2)
+
+static int emit_indirect_jump(struct SizedBuffer *output,
+			      unsigned flags)
+{
+	char buf[4];
+	if (flags & WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE) {
+		/* call label1_offset */
+		OUTS("\xe8");
+		OUTNULL(4);
+		encode_le_uint32_t(2 + 3 + 2,
+				   &output->elts[output->n_elts - 4]);
+
+		/* capture_ret_spec: */
+		/* pause */
+		OUTS("\xf3\x90");
+		/* lfence */
+		OUTS("\x0f\xae\xe8");
+		/* jmp capture_ret_spec_offset */
+		OUTS("\xeb");
+		OUTB(-2 - 3 - 2);
+
+		/* label1: */
+		/* mov %rax, (%rsp) */
+		OUTS("\x48\x89\x04\x24");
+		/* ret */
+		OUTS("\xc3");
+	} else {
+		if (flags & WASMJIT_COMPILE_FLAG_AMD_RETPOLINE) {
+			/* lfence */
+			OUTS("\x0f\xae\xe8");
+		}
+
+		/* jmp *%rax */
+		OUTS("\xff\xe0");
+	}
+
+	return 1;
+ error:
+	return 0;
+}
+
 #define TRAP_SIZE(flags) (15 + INDIRECT_CALL_SIZE(flags))
 static int emit_trap(struct SizedBuffer *output,
 		     struct MemoryReferences *memrefs,
@@ -606,8 +652,9 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 		OUTS("\x48\x63\x04\x82");
 		/* add %rdx, %rax */
 		OUTS("\x48\x01\xd0");
-		/* jmp *%rax */
-		OUTS("\xff\xe0");
+
+		if (!emit_indirect_jump(output, flags))
+			goto error;
 
 		/* output nop for each branch */
 		table_offset = output->n_elts;
@@ -2977,7 +3024,7 @@ char *wasmjit_compile_hostfunc(struct FuncType *type,
 
 	if (movabs_str) {
 		assert(strlen(movabs_str) == 2);
-		*out_size = 10 + 10 + 2;
+		*out_size = 10 + 10 + INDIRECT_JUMP_SIZE(flags);
 		out = malloc(*out_size);
 		if (!out)
 			return NULL;
@@ -2986,8 +3033,23 @@ char *wasmjit_compile_hostfunc(struct FuncType *type,
 		/* movabs $const, %rax */
 		memcpy(out + 10, "\x48\xb8", 2);
 		encode_le_uint64_t((uintptr_t) hostfunc, out + 12);
-		/* jmp *%rax */
-		memcpy(out + 20, "\xff\xe0", 2);
+
+		{
+			struct SizedBuffer outputv = { 0, NULL };
+			struct SizedBuffer *output = &outputv;
+
+			if (!emit_indirect_jump(output, flags)) {
+				free(output->elts);
+				free(out);
+				return NULL;
+			}
+
+			assert(output->n_elts == INDIRECT_JUMP_SIZE(flags));
+
+			memcpy(out + 20, output->elts, output->n_elts);
+
+			free(output->elts);
+		}
 	}
 
 	return out;
