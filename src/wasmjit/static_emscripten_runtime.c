@@ -22,13 +22,13 @@
   SOFTWARE.
  */
 
+#include <wasmjit/emscripten_runtime.h>
+
 #include <wasmjit/ast.h>
 #include <wasmjit/static_runtime.h>
 #include <wasmjit/util.h>
 
 #include <math.h>
-
-#include <wasmjit/emscripten_runtime.h>
 
 #define START_MODULE()				\
 	struct StaticModuleInst WASM_MODULE_SYMBOL(CURRENT_MODULE);
