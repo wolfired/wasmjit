@@ -1418,8 +1418,11 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 					   &real_offset))
 			goto error;
 
+		assert(real_offset > 0);
+		real_offset -= 1;
+
 		if (real_offset != 0) {
-			/* LOGIC: ea += memarg.offset + 4 */
+			/* LOGIC: ea += memarg.offset + mem_size - 1 */
 
 			/* can't encode this into the following instruction */
 			if (real_offset >= 0x80000000)
@@ -1459,13 +1462,13 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 			OUTS("\x48\x8b\x40");
 			OUTB(offsetof(struct MemInst, size));
 
-			/* LOGIC: if ea > size then trap() */
+			/* LOGIC: if ea >= size then trap() */
 
 			/* cmp %rax, %rsi */
 			OUTS("\x48\x39\xc6");
 
-			/* jle AFTER_TRAP: */
-			OUTS("\x7e");
+			/* jb AFTER_TRAP: */
+			OUTS("\x72");
 			OUTB(TRAP_SIZE(flags));
 			if (!emit_trap(output, memrefs, flags, WASMJIT_TRAP_MEMORY_OVERFLOW))
 				goto error;
@@ -1511,9 +1514,12 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 
 			/* sbb %rdx, %rdx */
 			OUTS("\x48\x19\xd2");
-			/* sub $mem_size, %rsi */
-			OUTS("\x48\x83\xee");
-			OUTB(mem_size);
+			assert(mem_size > 0);
+			if (mem_size - 1) {
+				/* sub $mem_size - 1, %rsi */
+				OUTS("\x48\x83\xee");
+				OUTB(mem_size - 1);
+			}
 			/* and %rdx, %rsi */
 			OUTS("\x48\x21\xd6");
 
@@ -1576,28 +1582,28 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 		case OPCODE_F32_STORE:
 		case OPCODE_I64_STORE32:
 			assert(4 == mem_size);
-			/* LOGIC: data[ea - 4] = pop_stack() */
-			/* movl %edi, -4(%rax, %rsi) */
-			OUTS("\x89\x7c\x30\xfc");
+			/* LOGIC: data[ea - 3] = pop_stack() */
+			/* movl %edi, -3(%rax, %rsi) */
+			OUTS("\x89\x7c\x30\xfd");
 			break;
 		case OPCODE_I32_STORE8:
 		case OPCODE_I64_STORE8:
 			assert(1 == mem_size);
-			/* LOGIC: data[ea - 1] = pop_stack() */
-			/* movb %dil, -1(%rax, %rsi) */
-			OUTS("\x40\x88\x7c\x30\xff");
+			/* LOGIC: data[ea - 0] = pop_stack() */
+			/* movb %dil, 0(%rax, %rsi) */
+			OUTS("\x40\x88\x3c\x30");
 			break;
 		case OPCODE_I32_STORE16:
 			assert(2 == mem_size);
-			/* movw %di, -2(%rax, %rsi) */
-			OUTS("\x66\x89\x7c\x30\xfe");
+			/* movw %di, -1(%rax, %rsi) */
+			OUTS("\x66\x89\x7c\x30\xff");
 			break;
 		case OPCODE_I64_STORE:
 		case OPCODE_F64_STORE:
 			assert(8 == mem_size);
-			/* LOGIC: data[ea - 8] = pop_stack() */
-			/* movq %rdi, -8(%rax, %rsi) */
-			OUTS("\x48\x89\x7c\x30\xf8");
+			/* LOGIC: data[ea - 7] = pop_stack() */
+			/* movq %rdi, -7(%rax, %rsi) */
+			OUTS("\x48\x89\x7c\x30\xf9");
 			break;
 		default:
 			assert(0);
