@@ -310,9 +310,141 @@ struct InstructionMD {
 	} data;
 };
 
-#define TRAP_SIZE 17
+#ifdef __x86_64__
+
+#if defined(__GNUC__)
+
+#include <cpuid.h>
+
+#elif defined(_MSC_VER)
+
+static int
+__get_cpuid(unsigned int __level,
+            unsigned int *__eax, unsigned int *__ebx,
+            unsigned int *__ecx, unsigned int *__edx) {
+  int cpu_info[4];
+
+  unsigned int __ext = __level & 0x80000000;
+
+  __cpuid(cpu_info, __ext);
+  if (cpu_info[0] < __level) return 0;
+
+  __cpuid(cpu_info, __level);
+  *__eax = cpu_info[0];
+  *__ebx = cpu_info[1];
+  *__ecx = cpu_info[2];
+  *__edx = cpu_info[3];
+
+  return 1;
+}
+
+#else
+
+#error Compiler not supported!
+
+#endif
+
+#endif
+
+unsigned wasmjit_detect_retpoline_flags()
+{
+	unsigned flags = 0;
+
+#ifdef __x86_64__
+	/*
+	  like linux, we assume all CPUs require retpoline, even though
+	  intel documentation ("Retpoline: A Branch Target Injection
+	  Mitigation" 5.1) that retpoline is only effective on intel
+	  processor family 6 that do not have support for enhanced IBRS.
+	*/
+	/*
+	  TODO: check if IBRS is enabled in this context to avoid using
+	  retpolines,
+	*/
+	{
+		uint32_t a, b, c, d;
+		int ret;
+		char buf[13];
+		ret = __get_cpuid(0, &a, &b, &c, &d);
+		if (ret) {
+			memcpy(buf, &b, 4);
+			memcpy(buf + 4, &d, 4);
+			memcpy(buf + 8, &c, 4);
+			buf[12] = '\0';
+			if (!strcmp(buf, "AuthenticAMD")) {
+				flags |= WASMJIT_COMPILE_FLAG_AMD_RETPOLINE;
+			}
+		}
+		if (!flags) {
+			flags |= WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE;
+		}
+	}
+#endif
+
+	return flags;
+}
+
+#define WASMJIT_INTEL_RETPOLINE_SIZE (2 + 5 + 2 + 3 + 2 + 4 + 1 + 5)
+#define WASMJIT_AMD_RETPOLINE_SIZE (3 + 2)
+
+#define INDIRECT_CALL_SIZE(flags) (((flags) & WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE) ? WASMJIT_INTEL_RETPOLINE_SIZE : ((flags) & WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE) ? WASMJIT_AMD_RETPOLINE_SIZE : 2)
+
+static int emit_indirect_call(struct SizedBuffer *output,
+			      unsigned flags)
+{
+	char buf[4];
+	if (flags & WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE) {
+		/* jmp label2_offset */
+		OUTS("\xeb");
+		OUTB(5 + 2 + 3 + 2 + 4 + 1);
+
+		/* label0: */
+		/* call label1_offset */
+		OUTS("\xe8");
+		OUTNULL(4);
+		encode_le_uint32_t(2 + 3 + 2,
+				   &output->elts[output->n_elts - 4]);
+
+		/* capture_ret_spec: */
+		/* pause */
+		OUTS("\xf3\x90");
+		/* lfence */
+		OUTS("\x0f\xae\xe8");
+		/* jmp capture_ret_spec_offset */
+		OUTS("\xeb");
+		OUTB(-2 - 3 - 2);
+
+		/* label1: */
+		/* mov %rax, (%rsp) */
+		OUTS("\x48\x89\x04\x24");
+		/* ret */
+		OUTS("\xc3");
+
+		/* label2: */
+		/* call label0_offset */
+		OUTS("\xe8");
+		OUTNULL(4);
+		encode_le_uint32_t(-5 -1 -4 -2 -3 -2 -5,
+				   &output->elts[output->n_elts - 4]);
+	} else {
+		if (flags & WASMJIT_COMPILE_FLAG_AMD_RETPOLINE) {
+			/* lfence */
+			OUTS("\x0f\xae\xe8");
+		}
+		/* call *%rax */
+		OUTS("\xff\xd0");
+	}
+
+	return 1;
+
+ error:
+	return 0;
+}
+
+#define TRAP_SIZE(flags) (15 + INDIRECT_CALL_SIZE(flags))
 static int emit_trap(struct SizedBuffer *output,
 		     struct MemoryReferences *memrefs,
+		     unsigned flags,
 		     int reason)
 {
 	char buf[8];
@@ -343,11 +475,11 @@ static int emit_trap(struct SizedBuffer *output,
 			output->n_elts - 8;
 	}
 
-	/* call *%rax */
-	OUTS("\xff\xd0");
+	if (!emit_indirect_call(output, flags))
+		goto error;
 
 #ifndef NDEBUG
-	assert(output->n_elts - offset == TRAP_SIZE);
+	assert(output->n_elts - offset == TRAP_SIZE(flags));
 #endif
 
 	return 1;
@@ -367,7 +499,8 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 				       size_t n_frame_locals,
 				       struct StaticStack *sstack,
 				       const struct Instr *instruction,
-				       int check_stack)
+				       int check_stack,
+				       unsigned flags)
 {
 	char buf[sizeof(uint64_t)];
 
@@ -375,7 +508,7 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 
 	switch (instruction->opcode) {
 	case OPCODE_UNREACHABLE:
-		if (!emit_trap(output, memrefs, WASMJIT_TRAP_UNREACHABLE))
+		if (!emit_trap(output, memrefs, flags, WASMJIT_TRAP_UNREACHABLE))
 			goto error;
 		break;
 	case OPCODE_NOP:
@@ -657,8 +790,8 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 				/* sub $8, %rsp */
 				OUTS("\x48\x83\xec\x08");
 
-			/* call *%rax */
-			OUTS("\xff\xd0");
+			if (!emit_indirect_call(output, flags))
+				goto error;
 
 			if (cur_stack_depth % 2)
 				/* add $8, %rsp */
@@ -740,8 +873,8 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 				/* sub $8, %rsp */
 				OUTS("\x48\x83\xec\x08");
 			}
-			/* call *%rax */
-			OUTS("\xff\xd0");
+			if (!emit_indirect_call(output, flags))
+				goto error;
 			if (cur_stack_depth % 2) {
 				/* add $8, %rsp */
 				OUTS("\x48\x83\xc4\x08");
@@ -778,9 +911,9 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 
 			/* jbe TRAP_SIZE */
 			OUTS("\x76");
-			OUTB(TRAP_SIZE);
+			OUTB(TRAP_SIZE(flags));
 
-			emit_trap(output, memrefs, WASMJIT_TRAP_STACK_OVERFLOW);
+			emit_trap(output, memrefs, flags, WASMJIT_TRAP_STACK_OVERFLOW);
 
 			/* restore funcinst ptr */
 			/* mov %rbx, %rax */
@@ -873,8 +1006,8 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 				goto error;
 		}
 
-		/* call *%rax */
-		OUTS("\xff\xd0");
+		if (!emit_indirect_call(output, flags))
+			goto error;
 
 		/* clean up stack */
 		/* add (n_stack + n_inputs + aligned) * 8, %rsp */
@@ -1286,8 +1419,8 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 
 			/* jle AFTER_TRAP: */
 			OUTS("\x7e");
-			OUTB(TRAP_SIZE);
-			if (!emit_trap(output, memrefs, WASMJIT_TRAP_MEMORY_OVERFLOW))
+			OUTB(TRAP_SIZE(flags));
+			if (!emit_trap(output, memrefs, flags, WASMJIT_TRAP_MEMORY_OVERFLOW))
 				goto error;
 		}
 
@@ -2062,7 +2195,8 @@ static int wasmjit_compile_instructions(const struct FuncType *func_types,
 					struct StaticStack *sstack,
 					const struct Instr *instructions,
 					size_t n_instructions,
-					size_t *max_stack)
+					size_t *max_stack,
+					unsigned flags)
 {
 	int ret;
 	size_t i;
@@ -2227,7 +2361,8 @@ static int wasmjit_compile_instructions(const struct FuncType *func_types,
 								 n_frame_locals,
 								 sstack,
 								 instruction,
-								 !!max_stack))
+								 !!max_stack,
+								 flags))
 					goto error;
 				break;
 			}
@@ -2397,7 +2532,8 @@ char *wasmjit_compile_function(const struct FuncType *func_types,
 			       const struct CodeSectionCode *code,
 			       struct MemoryReferences *memrefs,
 			       size_t *out_size,
-			       size_t *stack_usage)
+			       size_t *stack_usage,
+			       unsigned flags)
 {
 	char buf[sizeof(uint32_t)];
 	struct SizedBuffer outputv = { 0, NULL };
@@ -2588,7 +2724,7 @@ char *wasmjit_compile_function(const struct FuncType *func_types,
 					  output, &labels, &branches, memrefs,
 					  locals_md, n_locals, n_frame_locals, &sstack,
 					  code->instructions, code->n_instructions,
-					  stack_usage))
+					  stack_usage, flags))
 		goto error;
 
 	if (stack_usage) {
@@ -2703,7 +2839,8 @@ char *wasmjit_compile_function(const struct FuncType *func_types,
 char *wasmjit_compile_hostfunc(struct FuncType *type,
 			       void *hostfunc,
 			       void *funcinst_ptr,
-			       size_t *out_size)
+			       size_t *out_size,
+			       unsigned flags)
 {
 	char *out;
 	char *movabs_str = NULL;
@@ -2759,8 +2896,10 @@ char *wasmjit_compile_hostfunc(struct FuncType *type,
 			10 + 1 +
 			/* push old stack values */
 			7 * n_stack +
-			/* mov hostfunc to %rax and call there */
-			10 + 2 +
+			/* mov hostfunc to %rax  */
+			10 +
+			/* call %rax */
+			INDIRECT_CALL_SIZE(flags) +
 			/* cleanup stack */
 			7 +
 			/* ret */
@@ -2802,9 +2941,23 @@ char *wasmjit_compile_hostfunc(struct FuncType *type,
 		encode_le_uint64_t((uintptr_t) hostfunc, out + off);
 		off += 8;
 
-		/* call *%rax */
-		memcpy(out + off, "\xff\xd0", 2);
-		off += 2;
+		{
+			struct SizedBuffer outputv = { 0, NULL };
+			struct SizedBuffer *output = &outputv;
+
+			if (!emit_indirect_call(output, flags)) {
+				free(output->elts);
+				free(out);
+				return NULL;
+			}
+
+			assert(output->n_elts == INDIRECT_CALL_SIZE(flags));
+
+			memcpy(out + off, output->elts, output->n_elts);
+
+			free(output->elts);
+		}
+		off += INDIRECT_CALL_SIZE(flags);
 
 		/* cleanup stack */
 		memcpy(out + off, "\x48\x81\xc4", 3);
@@ -2842,7 +2995,8 @@ char *wasmjit_compile_hostfunc(struct FuncType *type,
 
 char *wasmjit_compile_invoker_offset(struct FuncType *type,
 				     size_t *compiled_code_offset,
-				     size_t *out_size)
+				     size_t *out_size,
+				     unsigned flags)
 {
 	size_t i;
 	size_t n_movs = 0, n_xmm_movs = 0, n_stack = 0;
@@ -2981,8 +3135,8 @@ char *wasmjit_compile_invoker_offset(struct FuncType *type,
 	*compiled_code_offset = output->n_elts;
 	OUTNULL(8);
 
-	/* call *%rax */
-	OUTS("\xff\xd0");
+	if (!emit_indirect_call(output, flags))
+		goto error;
 
 	/* mov (to_reserve - 1) *8(%rsp), %rbx */
 	OUTS("\x48\x8b\x9c\x24");
@@ -3018,10 +3172,11 @@ char *wasmjit_compile_invoker_offset(struct FuncType *type,
 
 char *wasmjit_compile_invoker(struct FuncType *type,
 			      void *compiled_code,
-			      size_t *out_size)
+			      size_t *out_size,
+			      unsigned flags)
 {
 	size_t offset;
-	char *ret = wasmjit_compile_invoker_offset(type, &offset, out_size);
+	char *ret = wasmjit_compile_invoker_offset(type, &offset, out_size, flags);
 	if (!ret)
 		return NULL;
 

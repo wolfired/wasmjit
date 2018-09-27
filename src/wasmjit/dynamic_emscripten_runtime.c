@@ -46,7 +46,8 @@ static struct FuncInst *alloc_func(struct ModuleInst *module, void *_fptr,
 	tmp_unmapped =
 		wasmjit_compile_hostfunc(&tmp_func->type, _fptr,
 					 tmp_func,
-					 &tmp_func->compiled_code_size);
+					 &tmp_func->compiled_code_size,
+					 wasmjit_detect_retpoline_flags());
 	if (!tmp_unmapped)
 		goto error;
 	tmp_func->compiled_code =
@@ -61,7 +62,8 @@ static struct FuncInst *alloc_func(struct ModuleInst *module, void *_fptr,
 	tmp_unmapped =
 		wasmjit_compile_invoker(&tmp_func->type,
 					tmp_func->compiled_code,
-					&tmp_func->invoker_size);
+					&tmp_func->invoker_size,
+					wasmjit_detect_retpoline_flags());
 	if (!tmp_unmapped)
 		goto error;
 	tmp_func->invoker =

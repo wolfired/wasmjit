@@ -54,25 +54,34 @@ struct MemoryReferences {
 	} *elts;
 };
 
+#define WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE 1
+#define WASMJIT_COMPILE_FLAG_AMD_RETPOLINE 2
+
+unsigned wasmjit_detect_retpoline_flags(void);
+
 char *wasmjit_compile_function(const struct FuncType *func_types,
 			       const struct ModuleTypes *module_types,
 			       const struct FuncType *type,
 			       const struct CodeSectionCode *code,
 			       struct MemoryReferences *memrefs,
 			       size_t *out_size,
-			       size_t *stack_usage);
+			       size_t *stack_usage,
+			       unsigned flags);
 
 char *wasmjit_compile_hostfunc(struct FuncType *type,
 			       void *hostfunc,
 			       void *funcinst_ptr,
-			       size_t *out_size);
+			       size_t *out_size,
+			       unsigned flags);
 
 char *wasmjit_compile_invoker(struct FuncType *type,
 			      void *compiled_code,
-			      size_t *out_size);
+			      size_t *out_size,
+			      unsigned flags);
 
 char *wasmjit_compile_invoker_offset(struct FuncType *type,
 				     size_t *compiled_code_offset,
-				     size_t *out_size);
+				     size_t *out_size,
+				     unsigned flags);
 
 #endif

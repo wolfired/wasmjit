@@ -184,6 +184,9 @@ struct ModuleInst *wasmjit_instantiate(const struct Module *module,
 	void *unmapped = NULL, *mapped = NULL;
 	struct MemoryReferences memrefs = {0, NULL};
 	size_t code_size;
+	unsigned global_compile_flags;
+
+	global_compile_flags = wasmjit_detect_retpoline_flags();
 
 	memset(&module_types, 0, sizeof(module_types));
 	module_inst = calloc(1, sizeof(*module_inst));
@@ -598,7 +601,8 @@ struct ModuleInst *wasmjit_instantiate(const struct Module *module,
 						    code,
 						    &memrefs,
 						    &code_size,
-						    &funcinst->stack_usage);
+						    &funcinst->stack_usage,
+						    global_compile_flags);
 		if (!unmapped)
 			goto error;
 
@@ -665,7 +669,8 @@ struct ModuleInst *wasmjit_instantiate(const struct Module *module,
 			assert(mapped == NULL);
 			unmapped = wasmjit_compile_invoker(&funcinst->type,
 							   funcinst->compiled_code,
-							   &invoker_size);
+							   &invoker_size,
+							   global_compile_flags);
 			if (!unmapped)
 				goto error;
 

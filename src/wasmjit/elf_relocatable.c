@@ -857,7 +857,8 @@ void *wasmjit_output_elf_relocatable(const char *module_name,
 						&module->code_section.codes[i],
 						memrefs,
 						&code_size,
-						NULL);
+						NULL,
+						0);
 		if (!code)
 			goto error;
 
@@ -876,7 +877,8 @@ void *wasmjit_output_elf_relocatable(const char *module_name,
 
 		code = wasmjit_compile_invoker_offset(ft,
 						      &memrefs->elts[0].code_offset,
-						      &code_size);
+						      &code_size,
+						      0);
 		if (!code)
 			goto error;
 
