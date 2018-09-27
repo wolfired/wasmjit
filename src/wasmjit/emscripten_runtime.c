@@ -165,27 +165,15 @@ static int wasmjit_emscripten_check_range_sanitize(struct MemInst *meminst,
 						   uint32_t *user_ptr,
 						   size_t extent)
 {
+	int toret;
 	size_t ret;
-	uint32_t mask;
-	uint8_t toret;
 
 	if (__builtin_add_overflow(*user_ptr, extent, &ret))
 		return 0;
 
-	{
-		int toret2;
-		toret = ret <= meminst->size;
+	WASMJIT_CHECK_RANGE_SANITIZE(toret, ret <= meminst->size, user_ptr);
 
-		toret2 = toret & 0x1;
-		/* NB: don't assume toret2's value,
-		   forces actual computation of mask */
-		__asm__ ("" : "=r" (toret2) : "0" (toret2));
-		mask = ((uint32_t)0 - toret2);
-	}
-
-	*user_ptr &= mask;
 	return toret;
-
 }
 
 static size_t wasmjit_emscripten_copy_to_user(struct MemInst *meminst,

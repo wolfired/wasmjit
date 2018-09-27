@@ -206,4 +206,15 @@ int wasmjit_invoke_function(struct FuncInst *funcinst,
 			    union ValueUnion *values,
 			    union ValueUnion *out);
 
+#define WASMJIT_CHECK_RANGE_SANITIZE(toret, cond, index)		\
+	do {								\
+		toret = (cond);						\
+		/* NB: don't assume toret's value,			\
+		   forces actual computation of mask */			\
+		__asm__ ("" : "=r" (toret) : "0" (toret));		\
+		*(index) &= ((*(index) - *(index)) - toret);		\
+		/* prevent moving masking of index after conditional on toret */ \
+		__asm__ ("" : "=r" (toret) : "0" (toret));		\
+	} while (0)
+
 #endif
