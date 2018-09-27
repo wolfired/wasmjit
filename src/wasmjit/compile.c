@@ -645,9 +645,13 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 		OUTS("\x0f\x83\x90\x90\x90\x90");
 		default_branch_offset = output->n_elts;
 
-		/* lea 9(%rip), %rdx */
-		OUTS("\x48\x8d\x15\x09");
+		/* lea 7 + INDIRECT_JUMP_SIZE(flags)(%rip), %rdx */
+		OUTS("\x48\x8d\x15");
+		OUTB(0);
 		OUTB(0); OUTB(0); OUTB(0);
+		encode_le_uint32_t(7 + INDIRECT_JUMP_SIZE(flags),
+				   &output->elts[output->n_elts - 4]);
+
 		/* movsxl (%rdx, %rax, 4), %rax */
 		OUTS("\x48\x63\x04\x82");
 		/* add %rdx, %rax */
