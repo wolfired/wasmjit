@@ -36,6 +36,10 @@ the `linux-headers-amd64` package, on Fedora, install `kernel-devel`.
 
 ## (Optional) Installing the Kernel Module
 
+Wasmjit has been designed for and tested with kernel versions 4.17+,
+though it should work with reasonably modern kernels. Your mileage may
+vary.
+
     $ make modclean
     $ make kwasmjit.ko
     $ sudo insmod ./kwasmjit.ko
