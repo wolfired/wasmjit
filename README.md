@@ -79,6 +79,7 @@ in order of priority:
 * Implement Go-runtime for Go-generated wasm files
 * Optimize x86_64 JIT
 * Implement arm64 JIT
+* Implement JIT debugging symbols
 * Implement macOS kernel module
 
 PRs are welcome :) see [CONTRIBUTING.md](./CONTRIBUTING.md) first.
