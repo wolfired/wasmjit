@@ -81,7 +81,7 @@ in order of priority:
 * Implement arm64 JIT
 * Implement macOS kernel module
 
-PRs are welcome :)
+PRs are welcome :) see [CONTRIBUTING.md](./CONTRIBUTING.md) first.
 
 # Linux Kernel Mode Caveats
 

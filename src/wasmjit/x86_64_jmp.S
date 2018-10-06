@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018 Rian Hunter
+  Copyright (c) 2018 Rian Hunter et. al, see AUTHORS file.
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
