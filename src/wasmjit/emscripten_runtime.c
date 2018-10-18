@@ -450,11 +450,60 @@ void wasmjit_emscripten_nullFunc_ii(uint32_t x, struct FuncInst *funcinst)
 	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'ii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
 }
 
+void wasmjit_emscripten_nullFunc_iii(uint32_t x, struct FuncInst *funcinst)
+{
+	(void)funcinst;
+	(void)x;
+	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'iii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
+}
+
 void wasmjit_emscripten_nullFunc_iiii(uint32_t x, struct FuncInst *funcinst)
 {
 	(void)funcinst;
 	(void)x;
 	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'iiii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
+}
+
+void wasmjit_emscripten_nullFunc_iiiii(uint32_t x, struct FuncInst *funcinst)
+{
+	(void)funcinst;
+	(void)x;
+	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'iiiii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
+}
+
+void wasmjit_emscripten_nullFunc_iiiiii(uint32_t x, struct FuncInst *funcinst)
+{
+	(void)funcinst;
+	(void)x;
+	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'iiiiii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
+}
+
+void wasmjit_emscripten_nullFunc_vi(uint32_t x, struct FuncInst *funcinst)
+{
+	(void)funcinst;
+	(void)x;
+	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'vi'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
+}
+
+void wasmjit_emscripten_nullFunc_vii(uint32_t x, struct FuncInst *funcinst)
+{
+	(void)funcinst;
+	(void)x;
+	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'vii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
+}
+
+void wasmjit_emscripten_nullFunc_viii(uint32_t x, struct FuncInst *funcinst)
+{
+	(void)funcinst;
+	(void)x;
+	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'viii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
+}
+
+void wasmjit_emscripten_nullFunc_viiii(uint32_t x, struct FuncInst *funcinst)
+{
+	(void)funcinst;
+	(void)x;
+	wasmjit_emscripten_internal_abort("Invalid function pointer called with signature 'viiii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
 }
 
 void wasmjit_emscripten____lock(uint32_t x, struct FuncInst *funcinst)
