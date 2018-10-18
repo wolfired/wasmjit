@@ -22,12 +22,9 @@
   SOFTWARE.
  */
 
-#include <wasmjit/emscripten_runtime_sys.h>
+#include <wasmjit/posix_sys.h>
 
-#include <wasmjit/ast.h>
-#include <wasmjit/runtime.h>
 #include <wasmjit/util.h>
-#include <wasmjit/sys.h>
 #include <wasmjit/ktls.h>
 
 #define __KT(to,n,t) t
@@ -44,7 +41,7 @@
 
 #define KWSCx(x, name, ...) long (*sys_ ## name)(__KMAP(x, __KT, __VA_ARGS__));
 
-#include <wasmjit/emscripten_runtime_sys_def.h>
+#include <wasmjit/posix_sys_def.h>
 
 #undef KWSCx
 
@@ -53,7 +50,7 @@
 #define KWSCx(x, name, ...) long (*name)(struct pt_regs *);
 
 static struct {
-#include <wasmjit/emscripten_runtime_sys_def.h>
+#include <wasmjit/posix_sys_def.h>
 } sctable_regs;
 
 #undef KWSCx
@@ -65,7 +62,7 @@ static struct {
 		return sctable_regs. name (vals);			\
 	}
 
-#include <wasmjit/emscripten_runtime_sys_def.h>
+#include <wasmjit/posix_sys_def.h>
 
 #undef KWSCx
 
@@ -73,19 +70,8 @@ static struct {
 
 #endif
 
-__attribute__((noreturn))
-void wasmjit_emscripten_internal_abort(const char *msg)
+int posix_linux_kernel_init(void)
 {
-	printk(KERN_NOTICE "kwasmjit abort PID %d: %s", current->pid, msg);
-	wasmjit_trap(WASMJIT_TRAP_ABORT);
-}
-
-struct MemInst *wasmjit_emscripten_get_mem_inst(struct FuncInst *funcinst)
-{
-	return wasmjit_get_ktls()->mem_inst;
-}
-
-int wasmjit_emscripten_linux_kernel_init(void) {
 #ifdef SCPREFIX
 
 #define KWSCx(x, n, ...)						\
@@ -112,7 +98,7 @@ int wasmjit_emscripten_linux_kernel_init(void) {
 
 #endif
 
-#include <wasmjit/emscripten_runtime_sys_def.h>
+#include <wasmjit/posix_sys_def.h>
 
 	return 1;
 }

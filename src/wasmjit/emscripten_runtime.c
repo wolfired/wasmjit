@@ -29,7 +29,7 @@
 
 #include <wasmjit/emscripten_runtime.h>
 
-#include <wasmjit/emscripten_runtime_sys.h>
+#include <wasmjit/posix_sys.h>
 #include <wasmjit/util.h>
 #include <wasmjit/runtime.h>
 #include <wasmjit/sys.h>
@@ -2907,3 +2907,34 @@ void wasmjit_emscripten_derive_memory_globals(uint32_t static_bump,
 	out->STACKTOP =  STACKTOP_V;
 	out->STACK_MAX = STACK_MAX_V;
 }
+
+#ifdef __KERNEL__
+
+#include <wasmjit/ktls.h>
+
+__attribute__((noreturn))
+void wasmjit_emscripten_internal_abort(const char *msg)
+{
+	printk(KERN_NOTICE "kwasmjit abort PID %d: %s", current->pid, msg);
+	wasmjit_trap(WASMJIT_TRAP_ABORT);
+}
+
+struct MemInst *wasmjit_emscripten_get_mem_inst(struct FuncInst *funcinst)
+{
+	return wasmjit_get_ktls()->mem_inst;
+}
+
+#else
+
+struct MemInst *wasmjit_emscripten_get_mem_inst(struct FuncInst *funcinst) {
+	return funcinst->module_inst->mems.elts[0];
+}
+
+__attribute__((noreturn))
+void wasmjit_emscripten_internal_abort(const char *msg)
+{
+	fprintf(stderr, "%s\n", msg);
+	wasmjit_trap(WASMJIT_TRAP_ABORT);
+}
+
+#endif

@@ -81,7 +81,7 @@ typedef struct msghdr user_msghdr_t;
 #define KWSC5(name, ...) KWSCx(5, name, __VA_ARGS__)
 #define KWSC6(name, ...) KWSCx(6, name, __VA_ARGS__)
 
-#include <wasmjit/emscripten_runtime_sys_def.h>
+#include <wasmjit/posix_sys_def.h>
 
 #undef KWSC1
 #undef KWSC2

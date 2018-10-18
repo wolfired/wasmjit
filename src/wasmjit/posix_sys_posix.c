@@ -22,7 +22,7 @@
   SOFTWARE.
  */
 
-#include <wasmjit/emscripten_runtime_sys.h>
+#include <wasmjit/posix_sys.h>
 
 #include <wasmjit/ast.h>
 #include <wasmjit/runtime.h>
@@ -53,15 +53,4 @@
 #define KWSC5(name, ...) KWSCx(5, name, __VA_ARGS__)
 #define KWSC6(name, ...) KWSCx(6, name, __VA_ARGS__)
 
-#include <wasmjit/emscripten_runtime_sys_def.h>
-
-struct MemInst *wasmjit_emscripten_get_mem_inst(struct FuncInst *funcinst) {
-	return funcinst->module_inst->mems.elts[0];
-}
-
-__attribute__((noreturn))
-void wasmjit_emscripten_internal_abort(const char *msg)
-{
-	fprintf(stderr, "%s\n", msg);
-	wasmjit_trap(WASMJIT_TRAP_ABORT);
-}
+#include <wasmjit/posix_sys_def.h>
