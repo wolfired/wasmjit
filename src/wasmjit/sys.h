@@ -32,6 +32,10 @@
 #include <linux/string.h>
 #include <linux/mm.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef NDEBUG
 #define assert(x)
 #else
@@ -185,6 +189,10 @@ typedef struct __jmp_buf_tag {
 
 int setjmp(jmp_buf);
 void longjmp(jmp_buf, int) __attribute__((noreturn));
+
+#ifdef __cplusplus
+}
+#endif
 
 #else
 

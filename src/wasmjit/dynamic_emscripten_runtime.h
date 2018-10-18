@@ -27,10 +27,18 @@
 
 #include <wasmjit/runtime.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct NamedModule *wasmjit_instantiate_emscripten_runtime(uint32_t static_bump,
 							   int has_table,
 							   size_t tablemin,
 							   size_t tablemax,
 							   size_t *amt);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

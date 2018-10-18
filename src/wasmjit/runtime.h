@@ -29,6 +29,10 @@
 #include <wasmjit/vector.h>
 #include <wasmjit/sys.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct Value {
 	wasmjit_valtype_t type;
 	union ValueUnion {
@@ -216,5 +220,9 @@ int wasmjit_invoke_function(struct FuncInst *funcinst,
 		/* prevent moving masking of index after conditional on toret */ \
 		__asm__ ("" : "=r" (*(toret)) : "0" (*(toret)));	\
 	} while (0)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -28,9 +28,17 @@
 #include <wasmjit/ast.h>
 #include <wasmjit/runtime.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ModuleInst *wasmjit_instantiate(const struct Module *module,
 				       size_t n_imports,
 				       const struct NamedModule *imports,
 				       char *why, size_t why_size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

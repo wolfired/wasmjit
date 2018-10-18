@@ -27,6 +27,10 @@
 
 #include <wasmjit/sys.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int wasmjit_vector_set_size(void *, size_t *, size_t, size_t);
 
 #define DEFINE_ANON_VECTOR(type) \
@@ -62,5 +66,9 @@ int wasmjit_vector_set_size(void *, size_t *, size_t, size_t);
 					       amt,			\
 					       sizeof(sstack->elts[0])); \
 	}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

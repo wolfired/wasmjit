@@ -27,10 +27,18 @@
 
 #include <wasmjit/ast.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void dump_instruction(const struct Instr *instructions,
 		      int indent);
 
 void dump_instructions(const struct Instr *instructions, size_t n_instructions,
 		       int indent);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

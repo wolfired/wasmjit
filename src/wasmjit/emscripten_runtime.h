@@ -29,6 +29,10 @@
 #include <wasmjit/util.h>
 #include <wasmjit/sys.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
 	WASMJIT_EMSCRIPTEN_TOTAL_MEMORY = 16777216,
 };
@@ -141,5 +145,9 @@ struct WasmJITEmscriptenMemoryGlobals {
 
 void wasmjit_emscripten_derive_memory_globals(uint32_t static_bump,
 					      struct WasmJITEmscriptenMemoryGlobals *out);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

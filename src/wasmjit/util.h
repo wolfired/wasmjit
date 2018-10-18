@@ -29,6 +29,10 @@
 
 #include <wasmjit/sys.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 __attribute__ ((unused))
 static uint16_t uint16_t_swap_bytes(uint16_t data)
 {
@@ -138,5 +142,9 @@ void wasmjit_unload_file(char *buf, size_t size);
 
 #define MMIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MMAX(x, y) (((x) > (y)) ? (x) : (y))
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

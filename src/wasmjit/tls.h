@@ -28,6 +28,10 @@
 #include <pthread.h>
 #include <errno.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef pthread_key_t wasmjit_tls_key_t;
 
 __attribute__((unused))
@@ -49,5 +53,9 @@ static int wasmjit_set_tls_key(wasmjit_tls_key_t key, void *val)
 {
 	return !pthread_setspecific(key, val);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

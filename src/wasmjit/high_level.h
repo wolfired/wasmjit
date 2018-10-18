@@ -30,6 +30,10 @@
 /* this interface mimics the kernel interface and thus lacks power
    since we can't pass in abitrary objects for import, like host functions */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if (defined(__linux__) || defined(__APPLE__) || defined(__unix__)) && !defined(__KERNEL__)
 #define WASMJIT_CAN_USE_DEVICE
 #endif
@@ -64,5 +68,8 @@ int wasmjit_high_emscripten_invoke_main(struct WasmJITHigh *self,
 void wasmjit_high_close(struct WasmJITHigh *self);
 int wasmjit_high_error_message(struct WasmJITHigh *self, char *buf, size_t buf_size);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

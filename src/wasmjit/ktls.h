@@ -31,6 +31,10 @@
 
 #include <linux/sched/task_stack.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct KernelThreadLocal {
 	jmp_buf *jmp_buf;
 	void *stack_top;
@@ -54,5 +58,9 @@ static inline struct KernelThreadLocal *wasmjit_get_ktls(void)
 	memcpy(&toret, ptrptr(), sizeof(toret));
 	return toret;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

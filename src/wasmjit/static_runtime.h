@@ -30,6 +30,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
 	GLOBAL_CONST_INIT,
 	GLOBAL_GLOBAL_INIT,
@@ -208,5 +212,9 @@ void wasmjit_init_static_module(struct StaticModuleInst *smi);
 	};
 
 #define DEFINE_WASM_MEMORY(...) _DEFINE_WASM_MEMORY(CURRENT_MODULE, __VA_ARGS__)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

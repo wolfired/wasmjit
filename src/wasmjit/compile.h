@@ -29,6 +29,10 @@
 
 #include <wasmjit/sys.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ModuleTypes {
 	struct FuncType *functypes;
 	struct TableType *tabletypes;
@@ -83,5 +87,9 @@ char *wasmjit_compile_invoker_offset(struct FuncType *type,
 				     size_t *compiled_code_offset,
 				     size_t *out_size,
 				     unsigned flags);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

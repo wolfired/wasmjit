@@ -39,6 +39,10 @@
 #error System not supported
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define KWASMJIT_MAGIC 0xCC
 
 struct kwasmjit_instantiate_args {
@@ -76,5 +80,9 @@ struct kwasmjit_error_message_args {
 #define KWASMJIT_INSTANTIATE_EMSCRIPTEN_RUNTIME _IOW(KWASMJIT_MAGIC, 1, struct kwasmjit_instantiate_emscripten_runtime_args)
 #define KWASMJIT_EMSCRIPTEN_INVOKE_MAIN _IOW(KWASMJIT_MAGIC, 2, struct kwasmjit_emscripten_invoke_main_args)
 #define KWASMJIT_ERROR_MESSAGE _IOW(KWASMJIT_MAGIC, 3, struct kwasmjit_error_message_args)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

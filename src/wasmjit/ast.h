@@ -27,6 +27,10 @@
 
 #include <wasmjit/sys.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
 	/* Control Instructions */
 	OPCODE_UNREACHABLE = 0x00,
@@ -489,5 +493,9 @@ struct Module {
 
 void wasmjit_init_module(struct Module *module);
 void wasmjit_free_module(struct Module *modules);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
