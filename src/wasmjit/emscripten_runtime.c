@@ -1613,6 +1613,17 @@ struct em_timeval {
 	uint32_t tv_sec, tv_usec;
 };
 
+#define EM_FD_SETSIZE 1024
+
+typedef struct {
+	uint32_t fds_bits[EM_FD_SETSIZE / 8 / sizeof(uint32_t)];
+} em_fd_set;
+
+#define EM_FD_ZERO(s) do { size_t __i; uint32_t *__b=(s)->fds_bits; for(__i=sizeof (fd_set)/sizeof (uint32_t); __i; __i--) *__b++=0; } while(0)
+#define EM_FD_SET(d, s)   ((s)->fds_bits[(d)/(8*sizeof(uint32_t))] |= (1UL<<((d)%(8*sizeof(uint32_t)))))
+#define EM_FD_CLR(d, s)   ((s)->fds_bits[(d)/(8*sizeof(uint32_t))] &= ~(1UL<<((d)%(8*sizeof(uint32_t)))))
+#define EM_FD_ISSET(d, s) !!((s)->fds_bits[(d)/(8*sizeof(uint32_t))] & (1UL<<((d)%(8*sizeof(uint32_t)))))
+
 struct linux_ucred {
 	uint32_t pid;
 	uint32_t uid;
@@ -2880,6 +2891,134 @@ uint32_t wasmjit_emscripten____syscall122(uint32_t which, uint32_t varargs,
 	strcpy(base + args.buf + 260, "x86-JS");
 
 	return 0;
+}
+
+static int read_fdset(struct FuncInst *funcinst,
+		      fd_set *dest,
+		      uint32_t user_addr)
+{
+	em_fd_set emfds;
+	size_t i;
+
+	FD_ZERO(dest);
+
+	if (_wasmjit_emscripten_copy_from_user(funcinst,
+					       &emfds,
+					       user_addr,
+					       sizeof(emfds)))
+		return -1;
+
+	for (i = 0; i < ARRAY_LEN(emfds.fds_bits); ++i) {
+		emfds.fds_bits[i] = uint32_t_swap_bytes(emfds.fds_bits[i]);
+	}
+
+	for (i = 0; i < EM_FD_SETSIZE; ++i) {
+		if (EM_FD_ISSET(i, &emfds)) {
+			FD_SET(i, dest);
+		}
+	}
+
+	return 0;
+}
+
+static void write_fdset_nocheck(struct FuncInst *funcinst,
+				uint32_t user_addr,
+				fd_set *src)
+{
+	char *base;
+	size_t i;
+	em_fd_set emfds;
+
+	EM_FD_ZERO(&emfds);
+
+	for (i = 0; i < EM_FD_SETSIZE; ++i) {
+		if (FD_ISSET(i, src)) {
+			EM_FD_SET(i, &emfds);
+		}
+	}
+
+	for (i = 0; i < ARRAY_LEN(emfds.fds_bits); ++i) {
+		emfds.fds_bits[i] = uint32_t_swap_bytes(emfds.fds_bits[i]);
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	memcpy(base + user_addr, &emfds, sizeof(emfds));
+}
+
+/* select */
+uint32_t wasmjit_emscripten____syscall142(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	long ret;
+	struct timeval tv, *tvp;
+	fd_set readfds, writefds, exceptfds;
+	fd_set *readfdsp, *writefdsp, *exceptfdsp;
+
+	LOAD_ARGS(funcinst, varargs, 5,
+		  int32_t, nfds,
+		  uint32_t, readfds,
+		  uint32_t, writefds,
+		  uint32_t, exceptfds,
+		  uint32_t, timeout);
+
+	(void) which;
+
+	if (args.readfds) {
+		if (read_fdset(funcinst, &readfds, args.readfds))
+			return -EM_EFAULT;
+		readfdsp = &readfds;
+	} else {
+		readfdsp = NULL;
+	}
+
+	if (args.writefds) {
+		if (read_fdset(funcinst, &writefds, args.writefds))
+			return -EM_EFAULT;
+		writefdsp = &writefds;
+	} else {
+		writefdsp = NULL;
+	}
+
+	if (args.exceptfds) {
+		if (read_fdset(funcinst, &exceptfds, args.exceptfds))
+			return -EM_EFAULT;
+		exceptfdsp = &exceptfds;
+	} else {
+		exceptfdsp = NULL;
+	}
+
+	if (args.timeout) {
+		struct em_timeval etv;
+		if (_wasmjit_emscripten_copy_from_user(funcinst, &etv, args.timeout, sizeof(etv)))
+			return -EM_EFAULT;
+		tv.tv_sec = uint32_t_swap_bytes(etv.tv_sec);
+		tv.tv_usec = uint32_t_swap_bytes(etv.tv_usec);
+		tvp = &tv;
+	} else {
+		tvp = NULL;
+	}
+
+	ret = sys_select(args.nfds,
+			 readfdsp, writefdsp, exceptfdsp,
+			 tvp);
+	if (ret >= 0) {
+		if (readfdsp) {
+			assert(args.readfds);
+			write_fdset_nocheck(funcinst, args.readfds, readfdsp);
+		}
+
+		if (writefdsp) {
+			assert(args.writefds);
+			write_fdset_nocheck(funcinst, args.writefds, writefdsp);
+		}
+
+		if (exceptfdsp) {
+			assert(args.exceptfds);
+			write_fdset_nocheck(funcinst, args.exceptfds, exceptfdsp);
+		}
+	}
+
+	return check_ret(ret);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
