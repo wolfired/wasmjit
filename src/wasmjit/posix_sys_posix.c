@@ -39,6 +39,22 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 
+#if !(defined(__linux__) || defined(__KERNEL__))
+
+int prlimit(int pid, int resource,
+	    const struct rlimit *new_limit,
+	    struct rlimit *old_limit)
+{
+	(void)pid;
+	(void)resource;
+	(void)new_limit;
+	(void)old_limit;
+	errno = ENOSYS;
+	return -1;
+}
+
+#endif
+
 #define __KDECL(to,n,t) t _##n
 #define __KA(to,n,t) _##n
 
