@@ -3291,6 +3291,40 @@ uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
 	}
 }
 
+/* pread64 */
+uint32_t wasmjit_emscripten____syscall180(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	char *base;
+	struct iovec liov;
+
+	LOAD_ARGS(funcinst, varargs, 5,
+		  int32_t, fd,
+		  uint32_t, buf,
+		  uint32_t, count,
+		  uint32_t, counthigh,
+		  uint64_t, offset);
+
+	(void)which;
+
+	if (args.counthigh)
+		return -EM_EFAULT;
+
+	/* NB: we don't use check_range_sanitize because
+	   we write to this memory location,
+	   but also because sys_preadv does its own spectre mitigation
+	*/
+	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, args.count))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	liov.iov_base = base + args.buf;
+	liov.iov_len = args.count;
+
+	return check_ret(sys_preadv(args.fd, &liov, 1, args.offset));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
