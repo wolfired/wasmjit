@@ -43,3 +43,4 @@ KWSC3(read, int, void *, size_t)
 KWSC1(pipe, int *)
 KWSC5(select, int, fd_set *, fd_set *, fd_set *, struct timeval *)
 KWSC3(readv, int, const struct iovec *, int);
+KWSC2(chmod, const char *, mode_t);

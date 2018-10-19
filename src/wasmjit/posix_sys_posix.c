@@ -32,6 +32,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 #define __KDECL(to,n,t) t _##n
 #define __KA(to,n,t) _##n
