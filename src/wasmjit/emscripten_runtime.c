@@ -2734,6 +2734,8 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 		base = wasmjit_emscripten_get_base_address(funcinst);
 
 		if (emmsg.msg_name) {
+			/* NB: we don't use check_range_sanitize because
+			   we write to this memory location */
 			if (!_wasmjit_emscripten_check_range(funcinst,
 							     emmsg.msg_name,
 							     emmsg.msg_namelen)) {
@@ -2756,6 +2758,8 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 
 		if (emmsg.msg_control) {
 			size_t to_malloc;
+			/* NB: we don't use check_range_sanitize because
+			   we write to this memory location */
 			if (!_wasmjit_emscripten_check_range(funcinst,
 							     emmsg.msg_control,
 							     emmsg.msg_controllen)) {
@@ -2885,6 +2889,8 @@ uint32_t wasmjit_emscripten____syscall122(uint32_t which, uint32_t varargs,
 
 	(void) which;
 
+	/* NB: we don't use check_range_sanitize because
+	   we write to this memory location */
 	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, 390))
 		return -EM_EFAULT;
 
