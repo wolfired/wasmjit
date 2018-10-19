@@ -22,6 +22,11 @@
   SOFTWARE.
  */
 
+/* For prlimit */
+#ifdef __linux__
+#define _GNU_SOURCE
+#endif
+
 #include <wasmjit/posix_sys.h>
 
 #include <wasmjit/ast.h>

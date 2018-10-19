@@ -3436,6 +3436,24 @@ static int convert_resource(int32_t resource)
 	}
 }
 
+static int32_t read_rlimit(struct FuncInst *funcinst,
+			   struct rlimit *limit,
+			   uint32_t user_addr)
+{
+	struct em_rlimit em_new_limit;
+	if (_wasmjit_emscripten_copy_from_user(funcinst,
+					       &em_new_limit,
+					       user_addr,
+					       sizeof(em_new_limit)))
+		return -EM_EFAULT;
+	em_new_limit.rlim_cur = uint64_t_swap_bytes(em_new_limit.rlim_cur);
+	em_new_limit.rlim_max = uint64_t_swap_bytes(em_new_limit.rlim_max);
+
+	limit->rlim_cur = em_new_limit.rlim_cur;
+	limit->rlim_max = em_new_limit.rlim_max;
+	return 0;
+}
+
 static void write_rlimit_nocheck(struct FuncInst *funcinst,
 				 uint32_t user_addr,
 				 struct rlimit *lrlim)
@@ -3489,6 +3507,55 @@ uint32_t wasmjit_emscripten____syscall191(uint32_t which, uint32_t varargs,
 		return ret;
 
 	write_rlimit_nocheck(funcinst, args.rlim, &lrlim);
+
+	return ret;
+}
+
+/* prlimit64 */
+uint32_t wasmjit_emscripten____syscall340(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	int sys_resource;
+	int32_t ret;
+	struct rlimit *new_limitp, *old_limitp, new_limit, old_limit;
+
+	LOAD_ARGS(funcinst, varargs, 4,
+		  uint32_t, pid,
+		  int32_t, resource,
+		  uint32_t, new_limit,
+		  uint32_t, old_limit);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.old_limit,
+					     sizeof(struct em_rlimit)))
+		return -EM_EFAULT;
+
+	if (args.new_limit) {
+		ret = read_rlimit(funcinst, &new_limit, args.new_limit);
+		if (ret < 0)
+			return ret;
+		new_limitp = &new_limit;
+	} else {
+		new_limitp = NULL;
+	}
+
+	if (args.old_limit) {
+		old_limitp = &old_limit;
+	} else {
+		old_limitp = NULL;
+	}
+
+	sys_resource = convert_resource(args.resource);
+
+	ret = check_ret(sys_prlimit(args.pid, sys_resource, new_limitp, old_limitp));
+	if (ret < 0)
+		return ret;
+
+	if (old_limitp) {
+		assert(args.old_limit);
+		write_rlimit_nocheck(funcinst, args.old_limit, old_limitp);
+	}
 
 	return ret;
 }
