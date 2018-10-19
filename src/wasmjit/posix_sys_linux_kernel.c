@@ -90,8 +90,8 @@ int posix_linux_kernel_init(void)
 
 #define KWSCx(x, n, ...)					\
 	do {							\
-		sctable. n = (void *)kallsyms_lookup_name("sys_" #n);	\
-		if (!sctable. n)				\
+		sys_ ## n = (void *)kallsyms_lookup_name("sys_" #n);	\
+		if (!sys_ ## n)				\
 			return 0;				\
 	}							\
 	while (0);
