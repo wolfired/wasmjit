@@ -33,7 +33,7 @@
 
 #if defined(__linux__)
 #include <linux/ioctl.h>
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) || defined(__OpenBSD__)
 #include <sys/ioccom.h>
 #else
 #error System not supported
