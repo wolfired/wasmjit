@@ -3465,19 +3465,8 @@ static void write_rlimit_nocheck(struct FuncInst *funcinst,
 	char *base;
 	struct em_rlimit emrlim;
 
-#if RLIM_INFINITY > UINT64_MAX
-	if (lrlim->rlim_cur > UINT64_MAX)
-		emrlim.rlim_cur = EM_RLIM_INFINITY;
-	else
-#endif
-		emrlim.rlim_cur = lrlim->rlim_cur;
-
-#if RLIM_INFINITY > UINT64_MAX
-	if (lrlim->rlim_max > UINT64_MAX)
-		emrlim.rlim_max = EM_RLIM_INFINITY;
-	else
-#endif
-		emrlim.rlim_max = lrlim->rlim_max;
+	emrlim.rlim_cur = MMIN(EM_RLIM_INFINITY, lrlim->rlim_cur);
+	emrlim.rlim_max = MMIN(EM_RLIM_INFINITY, lrlim->rlim_max);
 
 	emrlim.rlim_cur = uint64_t_swap_bytes(emrlim.rlim_cur);
 	emrlim.rlim_max = uint64_t_swap_bytes(emrlim.rlim_max);
