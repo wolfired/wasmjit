@@ -12,7 +12,7 @@ clean:
 wasmjit: $(WASMJIT_PREQS)
 	$(CC) -o $@ $(WASMJIT_PREQS) $(LCFLAGS) -pthread
 
-%.o: %.c
+.c.o:
 	$(CC) -c -o $@ $< $(LCFLAGS)
 
 UNAME ?= $(shell uname -r)
