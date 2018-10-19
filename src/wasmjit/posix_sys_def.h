@@ -42,3 +42,4 @@ KWSC1(chdir, const char *)
 KWSC3(read, int, void *, size_t)
 KWSC1(pipe, int *)
 KWSC5(select, int, fd_set *, fd_set *, fd_set *, struct timeval *)
+KWSC3(readv, int, const struct iovec *, int);

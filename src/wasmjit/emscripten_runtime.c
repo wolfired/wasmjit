@@ -3021,6 +3021,29 @@ uint32_t wasmjit_emscripten____syscall142(uint32_t which, uint32_t varargs,
 	return check_ret(ret);
 }
 
+/* readv */
+uint32_t wasmjit_emscripten____syscall145(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	struct iovec *liov;
+	long rret;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  int32_t, fd,
+		  uint32_t, iov_user,
+		  uint32_t, iovcnt);
+
+	(void)which;
+
+	rret = copy_iov(funcinst, args.iov_user, args.iovcnt, &liov);
+	if (rret >= 0) {
+		rret = sys_readv(args.fd, liov, args.iovcnt);
+		free(liov);
+	}
+
+	return check_ret(rret);
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
