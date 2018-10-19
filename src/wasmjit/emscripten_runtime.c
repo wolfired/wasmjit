@@ -1034,7 +1034,9 @@ static int convert_proto_to_local(int domain, int32_t proto)
 		case 47: return IPPROTO_GRE;
 		case 50: return IPPROTO_ESP;
 		case 51: return IPPROTO_AH;
+#ifdef IPPROTO_MTP
 		case 92: return IPPROTO_MTP;
+#endif
 #ifdef IPPROTO_BEETPH
 		case 94: return IPPROTO_BEETPH;
 #endif
@@ -1043,7 +1045,9 @@ static int convert_proto_to_local(int domain, int32_t proto)
 #ifdef IPPROTO_COMP
 		case 108: return IPPROTO_COMP;
 #endif
+#ifdef IPPROTO_SCTP
 		case 132: return IPPROTO_SCTP;
+#endif
 #ifdef IPPROTO_UDPLITE
 		case 136: return IPPROTO_UDPLITE;
 #endif
