@@ -32,15 +32,18 @@
 #include <linux/kallsyms.h>
 #include <linux/limits.h>
 #include <linux/socket.h>
+#include <linux/poll.h>
 
 typedef int socklen_t;
 typedef struct user_msghdr user_msghdr_t;
+typedef unsigned int nfds_t;
 
 #define SYS_CMSG_NXTHDR(msg, cmsg) __CMSG_NXTHDR((msg)->msg_control, (msg)->msg_controllen, (cmsg))
 
 #else
 
 #include <errno.h>
+#include <poll.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <sys/types.h>

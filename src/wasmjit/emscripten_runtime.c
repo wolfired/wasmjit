@@ -1624,6 +1624,12 @@ typedef struct {
 #define EM_FD_CLR(d, s)   ((s)->fds_bits[(d)/(8*sizeof(uint32_t))] &= ~(1UL<<((d)%(8*sizeof(uint32_t)))))
 #define EM_FD_ISSET(d, s) !!((s)->fds_bits[(d)/(8*sizeof(uint32_t))] & (1UL<<((d)%(8*sizeof(uint32_t)))))
 
+struct em_pollfd {
+	int32_t fd;
+	int16_t events;
+	int16_t revents;
+};
+
 struct linux_ucred {
 	uint32_t pid;
 	uint32_t uid;
@@ -3061,6 +3067,222 @@ uint32_t wasmjit_emscripten____syscall15(uint32_t which, uint32_t varargs,
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 	return check_ret(sys_chmod(base + args.pathname, args.mode));
+}
+
+/* these are specified by posix */
+#define EM_POLLIN     0x001
+#define EM_POLLPRI    0x002
+#define EM_POLLOUT    0x004
+#define EM_POLLERR    0x008
+#define EM_POLLHUP    0x010
+#define EM_POLLNVAL   0x020
+#define EM_POLLRDNORM 0x040
+#define EM_POLLRDBAND 0x080
+#define EM_POLLWRNORM 0x100
+#define EM_POLLWRBAND 0x200
+
+/* these are linux extensions */
+#define EM_POLLREMOVE 0x1000
+#define EM_POLLMSG    0x400
+#define EM_POLLRDHUP  0x2000
+
+static int check_poll_events(int16_t events) {
+	int16_t allevents =
+		EM_POLLIN |
+		EM_POLLPRI |
+		EM_POLLOUT |
+		EM_POLLERR |
+		EM_POLLHUP |
+		EM_POLLNVAL |
+		EM_POLLRDNORM |
+		EM_POLLRDBAND |
+		EM_POLLWRNORM |
+		EM_POLLWRBAND |
+#if (defined(__KERNEL__) || defined(__linux__))
+		EM_POLLREMOVE |
+		EM_POLLMSG |
+		EM_POLLRDHUP |
+#endif
+		0;
+
+	/* if event specifies anything we don't support
+	   return false */
+	return !(events & ~allevents);
+}
+
+static short convert_poll_events(int16_t events)
+{
+	short out = 0;
+
+#define CS(c)					\
+	if (events & EM_ ## c)			\
+		out |= c
+
+	CS(POLLIN);
+	CS(POLLPRI);
+	CS(POLLOUT);
+	CS(POLLERR);
+	CS(POLLHUP);
+	CS(POLLNVAL);
+	CS(POLLRDNORM);
+	CS(POLLRDBAND);
+	CS(POLLWRNORM);
+	CS(POLLWRBAND);
+
+#if (defined(__KERNEL__) || defined(__linux__))
+	CS(POLLREMOVE);
+	CS(POLLMSG);
+	CS(POLLRDHUP);
+#endif
+
+#undef CS
+
+	return out;
+}
+
+static int16_t back_convert_poll_events(short events)
+{
+	int16_t out = 0;
+
+#define CS(c)				\
+	if (events & c)			\
+		out |= EM_ ## c
+
+	CS(POLLIN);
+	CS(POLLPRI);
+	CS(POLLOUT);
+	CS(POLLERR);
+	CS(POLLHUP);
+	CS(POLLNVAL);
+	CS(POLLRDNORM);
+	CS(POLLRDBAND);
+	CS(POLLWRNORM);
+	CS(POLLWRBAND);
+
+#if (defined(__KERNEL__) || defined(__linux__))
+	CS(POLLREMOVE);
+	CS(POLLMSG);
+	CS(POLLRDHUP);
+#endif
+
+#undef CS
+
+	return out;
+}
+
+/* poll */
+uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	char *base;
+	size_t range;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  uint32_t, fds,
+		  uint32_t, nfds,
+		  int32_t, timeout);
+
+	(void)which;
+
+	if (__builtin_mul_overflow(args.nfds,
+				   sizeof(struct em_pollfd),
+				   &range))
+		return -EM_EFAULT;
+
+	if (!_wasmjit_emscripten_check_range_sanitize(funcinst, &args.fds, range))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	/* this should be computable at compile time */
+	if (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ &&
+	    sizeof(struct pollfd) == sizeof(struct em_pollfd) &&
+	    sizeof(int) == sizeof(int32_t) &&
+	    sizeof(short) == sizeof(int16_t) &&
+	    POLLIN == EM_POLLIN &&
+	    POLLRDNORM == EM_POLLRDNORM &&
+	    POLLRDBAND == EM_POLLRDBAND &&
+	    POLLPRI == EM_POLLPRI &&
+	    POLLOUT == EM_POLLOUT &&
+	    POLLWRNORM == EM_POLLWRNORM &&
+	    POLLWRBAND == EM_POLLWRBAND &&
+	    POLLERR == EM_POLLERR &&
+	    POLLHUP == EM_POLLHUP &&
+	    POLLNVAL == EM_POLLNVAL &&
+#if (defined(__KERNEL__) || defined(__linux__))
+	    POLLREMOVE == EM_POLLREMOVE &&
+	    POLLMSG == EM_POLLMSG &&
+	    POLLRDHUP == EM_POLLRDHUP &&
+#endif
+	    1) {
+#if !(defined(__KERNEL__) || defined(__linux__))
+		/* if not on linux, check that only posix flags are specfied */
+		{
+			uint32_t i;
+			for (i = 0; i < args.nfds; ++i) {
+				struct em_pollfd epfd;
+				memcpy(&epfd, base + args.fds + i * sizeof(epfd),
+				       sizeof(epfd));
+				if (!check_poll_events(epfd.events)) {
+					return -EM_EINVAL;
+				}
+			}
+		}
+#endif
+		return check_ret(sys_poll((struct pollfd *)(base + args.fds),
+					  args.nfds, args.timeout));
+	} else {
+		uint32_t i, ret;
+		struct pollfd *fds;
+
+		fds = wasmjit_alloc_vector(args.nfds,
+					   sizeof(struct pollfd),
+					   NULL);
+		if (!fds)
+			return -EM_ENOMEM;
+
+		for (i = 0; i < args.nfds; ++i) {
+			struct em_pollfd epfd;
+
+			memcpy(&epfd, base + args.fds + i * sizeof(epfd),
+			       sizeof(epfd));
+
+			epfd.fd = uint32_t_swap_bytes(epfd.fd);
+			epfd.events = uint16_t_swap_bytes(epfd.events);
+
+			if (!check_poll_events(epfd.events)) {
+				free(fds);
+				return -EM_EINVAL;
+			}
+
+			fds[i].fd = epfd.fd;
+			fds[i].events = convert_poll_events(epfd.events);
+		}
+
+		ret = check_ret(sys_poll(fds, args.nfds, args.timeout));
+
+		/* write revents back to args.fds */
+		for (i = 0; i < args.nfds; ++i) {
+			struct em_pollfd epfd;
+
+			memcpy(&epfd,
+			       base + args.fds + i * sizeof(epfd),
+			       sizeof(epfd));
+
+			/* NB: we trust the flags given by revents,
+			   e.g. we don't expect the flags to be larger
+			   than 16 bits, or something the user doesn't expect */
+			epfd.revents = uint16_t_swap_bytes(back_convert_poll_events(fds[i].revents));
+
+			memcpy(base + args.fds + i * sizeof(epfd),
+			       &epfd,
+			       sizeof(epfd));
+		}
+
+		free(fds);
+
+		return ret;
+	}
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
