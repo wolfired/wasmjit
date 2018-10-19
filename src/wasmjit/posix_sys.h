@@ -56,6 +56,7 @@ typedef unsigned int nfds_t;
 #include <netinet/in.h>
 #include <sys/un.h>
 #include <net/if.h>
+#include <sys/resource.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096

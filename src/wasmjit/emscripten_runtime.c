@@ -1630,6 +1630,11 @@ struct em_pollfd {
 	int16_t revents;
 };
 
+struct em_rlimit {
+	uint64_t rlim_cur;
+	uint64_t rlim_max;
+};
+
 struct linux_ucred {
 	uint32_t pid;
 	uint32_t uid;
@@ -3355,6 +3360,137 @@ uint32_t wasmjit_emscripten____syscall181(uint32_t which, uint32_t varargs,
 	liov.iov_len = args.count;
 
 	return check_ret(sys_pwritev(args.fd, &liov, 1, args.offset));
+}
+
+#define EM_RLIM_INFINITY  ~((uint64_t)0)
+
+#define EM_RLIMIT_CPU     0
+#define EM_RLIMIT_FSIZE   1
+#define EM_RLIMIT_DATA    2
+#define EM_RLIMIT_STACK   3
+#define EM_RLIMIT_CORE    4
+#define EM_RLIMIT_RSS     5
+#define EM_RLIMIT_NPROC   6
+#define EM_RLIMIT_NOFILE  7
+#define EM_RLIMIT_MEMLOCK 8
+#define EM_RLIMIT_AS      9
+#define EM_RLIMIT_LOCKS   10
+#define EM_RLIMIT_SIGPENDING 11
+#define EM_RLIMIT_MSGQUEUE 12
+#define EM_RLIMIT_NICE    13
+#define EM_RLIMIT_RTPRIO  14
+
+static int convert_resource(int32_t resource)
+{
+#if (defined(__KERNEL__) || defined(__linux__))
+	return resource;
+#endif
+
+	switch (resource) {
+#ifdef RLIMIT_CPU
+	case EM_RLIMIT_CPU: return RLIMIT_CPU;
+#endif
+#ifdef RLIMIT_FSIZE
+	case EM_RLIMIT_FSIZE: return RLIMIT_FSIZE;
+#endif
+#ifdef RLIMIT_DATA
+	case EM_RLIMIT_DATA: return RLIMIT_DATA;
+#endif
+#ifdef RLIMIT_STACK
+	case EM_RLIMIT_STACK: return RLIMIT_STACK;
+#endif
+#ifdef RLIMIT_CORE
+	case EM_RLIMIT_CORE: return RLIMIT_CORE;
+#endif
+#ifdef RLIMIT_RSS
+	case EM_RLIMIT_RSS: return RLIMIT_RSS;
+#endif
+#ifdef RLIMIT_NPROC
+	case EM_RLIMIT_NPROC: return RLIMIT_NPROC;
+#endif
+#ifdef RLIMIT_NOFILE
+	case EM_RLIMIT_NOFILE: return RLIMIT_NOFILE;
+#endif
+#ifdef RLIMIT_MEMLOCK
+	case EM_RLIMIT_MEMLOCK: return RLIMIT_MEMLOCK;
+#endif
+#ifdef RLIMIT_AS
+	case EM_RLIMIT_AS: return RLIMIT_AS;
+#endif
+#ifdef RLIMIT_LOCKS
+	case EM_RLIMIT_LOCKS: return RLIMIT_LOCKS;
+#endif
+#ifdef RLIMIT_SIGPENDING
+	case EM_RLIMIT_SIGPENDING: return RLIMIT_SIGPENDING;
+#endif
+#ifdef RLIMIT_MSGQUEUE
+	case EM_RLIMIT_MSGQUEUE: return RLIMIT_MSGQUEUE;
+#endif
+#ifdef RLIMIT_NICE
+	case EM_RLIMIT_NICE: return RLIMIT_NICE;
+#endif
+#ifdef RLIMIT_RTPRIO
+	case EM_RLIMIT_RTPRIO: return RLIMIT_RTPRIO;
+#endif
+	default: return -1;
+	}
+}
+
+static void write_rlimit_nocheck(struct FuncInst *funcinst,
+				 uint32_t user_addr,
+				 struct rlimit *lrlim)
+{
+	char *base;
+	struct em_rlimit emrlim;
+
+#if RLIM_INFINITY > UINT64_MAX
+	if (lrlim->rlim_cur > UINT64_MAX)
+		emrlim.rlim_cur = EM_RLIM_INFINITY;
+	else
+#endif
+		emrlim.rlim_cur = lrlim->rlim_cur;
+
+#if RLIM_INFINITY > UINT64_MAX
+	if (lrlim->rlim_max > UINT64_MAX)
+		emrlim.rlim_max = EM_RLIM_INFINITY;
+	else
+#endif
+		emrlim.rlim_max = lrlim->rlim_max;
+
+	emrlim.rlim_cur = uint64_t_swap_bytes(emrlim.rlim_cur);
+	emrlim.rlim_max = uint64_t_swap_bytes(emrlim.rlim_max);
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	memcpy(base + user_addr, &emrlim, sizeof(emrlim));
+}
+
+/* ugetrlimit */
+uint32_t wasmjit_emscripten____syscall191(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	int32_t ret;
+	struct rlimit lrlim;
+	int sys_resource;
+
+	LOAD_ARGS(funcinst, varargs, 2,
+		  int32_t, resource,
+		  uint32_t, rlim);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.rlim,
+					     sizeof(struct em_rlimit)))
+		return -EM_EFAULT;
+
+	sys_resource = convert_resource(args.resource);
+
+	ret = check_ret(sys_getrlimit(sys_resource, &lrlim));
+	if (ret < 0)
+		return ret;
+
+	write_rlimit_nocheck(funcinst, args.rlim, &lrlim);
+
+	return ret;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
