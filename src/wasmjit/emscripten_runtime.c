@@ -3566,6 +3566,19 @@ uint32_t wasmjit_emscripten____syscall192(uint32_t which, uint32_t varargs,
 	return -EM_ENOSYS;
 }
 
+/* ftruncate64 */
+uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	LOAD_ARGS(funcinst, varargs, 2,
+		  int32_t, fd,
+		  uint64_t, length)
+
+	(void)which;
+
+	return check_ret(sys_ftruncate(args.fd, args.length));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
