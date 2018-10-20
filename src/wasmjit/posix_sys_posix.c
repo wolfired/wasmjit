@@ -58,8 +58,8 @@ int prlimit(int pid, int resource,
 #define __KDECL(to,n,t) t _##n
 #define __KA(to,n,t) _##n
 
-#define KWSCx(x, name, ...)					\
-	long sys_ ## name(__KMAP(x, __KDECL, __VA_ARGS__))	\
+#define KWSCx(x, pre, name, ...)					\
+	long pre ## sys_ ## name(__KMAP(x, __KDECL, __VA_ARGS__))	\
 	{							\
 		long ret;					\
 		ret = name(__KMAP(x, __KA, __VA_ARGS__));	\
@@ -69,11 +69,11 @@ int prlimit(int pid, int resource,
 		return ret;					\
 	}
 
-#define KWSC1(name, ...) KWSCx(1, name, __VA_ARGS__)
-#define KWSC2(name, ...) KWSCx(2, name, __VA_ARGS__)
-#define KWSC3(name, ...) KWSCx(3, name, __VA_ARGS__)
-#define KWSC4(name, ...) KWSCx(4, name, __VA_ARGS__)
-#define KWSC5(name, ...) KWSCx(5, name, __VA_ARGS__)
-#define KWSC6(name, ...) KWSCx(6, name, __VA_ARGS__)
+#define KWSC1(pre, name, ...) KWSCx(1, pre, name, __VA_ARGS__)
+#define KWSC2(pre, name, ...) KWSCx(2, pre, name, __VA_ARGS__)
+#define KWSC3(pre, name, ...) KWSCx(3, pre, name, __VA_ARGS__)
+#define KWSC4(pre, name, ...) KWSCx(4, pre, name, __VA_ARGS__)
+#define KWSC5(pre, name, ...) KWSCx(5, pre, name, __VA_ARGS__)
+#define KWSC6(pre, name, ...) KWSCx(6, pre, name, __VA_ARGS__)
 
-#include <wasmjit/posix_sys_def.h>
+#include <wasmjit/posix_sys_posix_def.h>

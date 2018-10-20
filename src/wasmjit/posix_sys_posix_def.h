@@ -21,17 +21,22 @@
  */
 
 
-KWSC3(, socket, int, int, int)
-KWSC3(, bind, int, const struct sockaddr *, socklen_t)
-KWSC3(, connect, int, const struct sockaddr *, socklen_t)
-KWSC2(, listen, int, int)
-KWSC3(, accept, int, struct sockaddr *, socklen_t *)
-KWSC1(, unlink, const char *)
-KWSC1(, chdir, const char *)
-KWSC3(, getsockname, int, struct sockaddr *, socklen_t *)
-KWSC3(, getpeername, int, struct sockaddr *, socklen_t *)
-KWSC5(, setsockopt, int, int, int, const void *, socklen_t)
-KWSC5(, getsockopt, int, int, int, void *, socklen_t *)
-KWSC1(, pipe, int *)
-KWSC5(, select, int, fd_set *, fd_set *, fd_set *, struct timeval *)
-KWSC3(, poll, struct pollfd *, nfds_t, int)
+/* common definitions */
+#include <wasmjit/posix_sys_def.h>
+
+KWSC3(, lseek, int, off_t, int)
+KWSC3(, writev, int, const struct iovec *, int)
+KWSC3(, write, int, const void *, size_t)
+KWSC1(, close, int)
+KWSC6(, sendto, int, const void *, size_t, int, const struct sockaddr *, socklen_t)
+KWSC6(, recvfrom, int, void *, size_t, int, struct sockaddr *, socklen_t *)
+KWSC3(, sendmsg, int, const user_msghdr_t *, int)
+KWSC3(, recvmsg, int, user_msghdr_t *, int)
+KWSC3(, read, int, void *, size_t)
+KWSC3(, readv, int, const struct iovec *, int)
+KWSC2(, chmod, const char *, mode_t)
+KWSC4(, preadv, int, const struct iovec *, int, off_t)
+KWSC4(, pwritev, int, const struct iovec *, int, off_t)
+KWSC2(, getrlimit, int, struct rlimit *)
+KWSC4(, prlimit, int, int, const struct rlimit *, struct rlimit *)
+KWSC2(, ftruncate, int, off_t);

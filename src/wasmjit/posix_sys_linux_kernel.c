@@ -33,29 +33,29 @@
 #define __KINIT(to,n,t) . t = (unsigned long) _##n
 #define __KSET(to,n,t) vals-> t = (unsigned long) _##n
 
-#define KWSC1(name, ...) KWSCx(1, name, __VA_ARGS__)
-#define KWSC2(name, ...) KWSCx(2, name, __VA_ARGS__)
-#define KWSC3(name, ...) KWSCx(3, name, __VA_ARGS__)
-#define KWSC4(name, ...) KWSCx(4, name, __VA_ARGS__)
-#define KWSC5(name, ...) KWSCx(5, name, __VA_ARGS__)
-#define KWSC6(name, ...) KWSCx(6, name, __VA_ARGS__)
+#define KWSC1(pre, name, ...) KWSCx(1, pre, name, __VA_ARGS__)
+#define KWSC2(pre, name, ...) KWSCx(2, pre, name, __VA_ARGS__)
+#define KWSC3(pre, name, ...) KWSCx(3, pre, name, __VA_ARGS__)
+#define KWSC4(pre, name, ...) KWSCx(4, pre, name, __VA_ARGS__)
+#define KWSC5(pre, name, ...) KWSCx(5, pre, name, __VA_ARGS__)
+#define KWSC6(pre, name, ...) KWSCx(6, pre, name, __VA_ARGS__)
 
-#define KWSCx(x, name, ...) long (*sys_ ## name)(__KMAP(x, __KT, __VA_ARGS__));
+#define KWSCx(x, pre, name, ...) long (*pre ## sys_ ## name)(__KMAP(x, __KT, __VA_ARGS__));
 
-#include <wasmjit/posix_sys_def.h>
+#include <wasmjit/posix_sys_linux_kernel_def.h>
 
 #undef KWSCx
 
 #ifdef __x86_64__
 
-#define KWSCx(x, name, ...) long (*name)(struct pt_regs *);
+#define KWSCx(x, pre, name, ...) long (*name)(struct pt_regs *);
 
 static struct {
-#include <wasmjit/posix_sys_def.h>
+#include <wasmjit/posix_sys_linux_kernel_def.h>
 } sctable_regs;
 
 #undef KWSCx
-#define KWSCx(x, name, ...)						\
+#define KWSCx(x, pre, name, ...)					\
 	long sys_ ## name ## _regs(__KMAP(x, __KDECL, __VA_ARGS__))	\
 	{								\
 		struct pt_regs *vals = &wasmjit_get_ktls()->regs;	\
@@ -63,7 +63,7 @@ static struct {
 		return sctable_regs. name (vals);			\
 	}
 
-#include <wasmjit/posix_sys_def.h>
+#include <wasmjit/posix_sys_linux_kernel_def.h>
 
 #undef KWSCx
 
@@ -71,35 +71,67 @@ static struct {
 
 #endif
 
+long sys_prlimit(pid_t pid, unsigned int resource,
+		 const struct rlimit *new_limit,
+		 struct rlimit *old_limit) {
+	struct rlimit64 new_limit_64, old_limit_64;
+	struct rlimit64 *new_limit_64_p, *old_limit_64_p;
+	long ret;
+
+	if (new_limit) {
+		new_limit_64.rlim_cur = new_limit->rlim_cur;
+		new_limit_64.rlim_max = new_limit->rlim_max;
+		new_limit_64_p = &new_limit_64;
+	} else {
+		new_limit_64_p = NULL;
+	}
+
+	if (old_limit) {
+		old_limit_64_p = &old_limit_64;
+	} else {
+		old_limit_64_p = NULL;
+	}
+
+	ret = sys_prlimit64(pid, resource, new_limit_64_p, old_limit_64_p);
+	if (ret >= 0) {
+		if (old_limit) {
+			old_limit->rlim_cur = MMIN(RLIM_INFINITY, old_limit_64.rlim_cur);
+			old_limit->rlim_max = MMIN(RLIM_INFINITY, old_limit_64.rlim_max);
+		}
+	}
+
+	return ret;
+}
+
 int posix_linux_kernel_init(void)
 {
 #ifdef SCPREFIX
 
-#define KWSCx(x, n, ...)						\
+#define KWSCx(x, p, n, ...)						\
 	do {								\
-		sys_ ## n = (void *)kallsyms_lookup_name("sys_" #n);	\
-		if (!sys_ ## n) {					\
+		p ## sys_ ## n = (void *)kallsyms_lookup_name("sys_" #n);	\
+		if (!p ## sys_ ## n) {					\
 			sctable_regs. n = (void *)kallsyms_lookup_name(SCPREFIX #n); \
 			if (!sctable_regs. n)				\
 				return 0;				\
-			sys_ ## n = &sys_ ## n ## _regs;		\
+			p ## sys_ ## n = &sys_ ## n ## _regs;		\
 		}							\
 	}								\
 	while (0);
 
 #else
 
-#define KWSCx(x, n, ...)					\
+#define KWSCx(x, p, n, ...)					\
 	do {							\
-		sys_ ## n = (void *)kallsyms_lookup_name("sys_" #n);	\
-		if (!sys_ ## n)				\
+		p ## sys_ ## n = (void *)kallsyms_lookup_name("sys_" #n);	\
+		if (!p ## sys_ ## n)					\
 			return 0;				\
 	}							\
 	while (0);
 
 #endif
 
-#include <wasmjit/posix_sys_def.h>
+#include <wasmjit/posix_sys_linux_kernel_def.h>
 
 	return 1;
 }

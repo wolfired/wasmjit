@@ -74,24 +74,36 @@ typedef struct msghdr user_msghdr_t;
 
 #define __KDECL(to,n,t) t _##n
 
+#define KWSC1(pre, name, ...) KWSCx(1, pre, name, __VA_ARGS__)
+#define KWSC2(pre, name, ...) KWSCx(2, pre, name, __VA_ARGS__)
+#define KWSC3(pre, name, ...) KWSCx(3, pre, name, __VA_ARGS__)
+#define KWSC4(pre, name, ...) KWSCx(4, pre, name, __VA_ARGS__)
+#define KWSC5(pre, name, ...) KWSCx(5, pre, name, __VA_ARGS__)
+#define KWSC6(pre, name, ...) KWSCx(6, pre, name, __VA_ARGS__)
+
 #ifdef __KERNEL__
 
-#define KWSCx(_n, _name, ...) extern long (*sys_ ## _name)(__KMAP(_n, __KDECL, __VA_ARGS__));
+#define KWSCx(_n, _pre, _name, ...) extern long (*_pre ## sys_ ## _name)(__KMAP(_n, __KDECL, __VA_ARGS__));
+
+#include <wasmjit/posix_sys_linux_kernel_def.h>
+
+#define sys_preadv(fd, vec, vlen, pos)					\
+	_sys_preadv((fd), (vec), (vlen), (pos) & 0xffffffff, (pos) >> 32)
+
+#define sys_pwritev(fd, vec, vlen, pos)					\
+	_sys_pwritev((fd), (vec), (vlen), (pos) & 0xffffffff, (pos) >> 32)
+
+long sys_prlimit(pid_t pid, unsigned int resource,
+		 const struct rlimit *new_limit,
+		 struct rlimit *old_limit);
 
 #else
 
-#define KWSCx(_n, _name, ...) long sys_ ## _name(__KMAP(_n, __KDECL, __VA_ARGS__));
+#define KWSCx(_n, _pre, _name, ...) long _pre ## sys_ ## _name(__KMAP(_n, __KDECL, __VA_ARGS__));
+
+#include <wasmjit/posix_sys_posix_def.h>
 
 #endif
-
-#define KWSC1(name, ...) KWSCx(1, name, __VA_ARGS__)
-#define KWSC2(name, ...) KWSCx(2, name, __VA_ARGS__)
-#define KWSC3(name, ...) KWSCx(3, name, __VA_ARGS__)
-#define KWSC4(name, ...) KWSCx(4, name, __VA_ARGS__)
-#define KWSC5(name, ...) KWSCx(5, name, __VA_ARGS__)
-#define KWSC6(name, ...) KWSCx(6, name, __VA_ARGS__)
-
-#include <wasmjit/posix_sys_def.h>
 
 #undef KWSC1
 #undef KWSC2
