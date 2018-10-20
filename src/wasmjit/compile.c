@@ -2689,6 +2689,18 @@ char *wasmjit_compile_function(const struct FuncType *func_types,
 			"\x4c\x89\x4d",	/* mov %r9, N(%rbp) */
 		};
 
+		static char *const i32_movs[] = {
+			"\x89\xf8",	/* mov %edi, %eax */
+			"\x89\xf0",	/* mov %esi, %eax */
+			"\x89\xd0",	/* mov %edx, %eax */
+			"\x89\xc8",	/* mov %ecx, %eax */
+			"\x44\x89\xc0",	/* mov %r8d, %eax */
+			"\x44\x89\xc8",	/* mov %r9d, %eax */
+		};
+
+		/* mov %rax, N(%rbp) */
+		static char *const mov_rax_to_bp = "\x48\x89\x45";
+
 		static const char *const f32_movs[] = {
 			"\xf3\x0f\x11\x45",	/* movss %xmm0, N(%rbp) */
 			"\xf3\x0f\x11\x4d",	/* movss %xmm1, N(%rbp) */
@@ -2733,9 +2745,12 @@ char *wasmjit_compile_function(const struct FuncType *func_types,
 			if (locals_md[i].fp_offset > 0)
 				continue;
 
-			if (type->input_types[i] == VALTYPE_I32 ||
-			    type->input_types[i] == VALTYPE_I64) {
+			if (type->input_types[i] == VALTYPE_I64) {
 				OUTS(movs[n_movs]);
+				n_movs += 1;
+			} else if (type->input_types[i] == VALTYPE_I32) {
+				OUTS(i32_movs[n_movs]);
+				OUTS(mov_rax_to_bp);
 				n_movs += 1;
 			} else {
 				if (type->input_types[i] == VALTYPE_F32) {
@@ -3133,15 +3148,6 @@ char *wasmjit_compile_invoker_offset(struct FuncType *type,
 			"\x4c\x8b\x8b", /* mov N(%rbx), %r9 */
 		};
 
-		static const char *const movs_32[] = {
-			"\x8b\xbb", /* mov N(%rbx), %edi */
-			"\x8b\xb3", /* mov N(%rbx), %esi */
-			"\x8b\x93", /* mov N(%rbx), %edx */
-			"\x8b\x8b", /* mov N(%rbx), %ecx */
-			"\x44\x8b\x83", /* mov N(%rbx), %r8d */
-			"\x44\x8b\x8b", /* mov N(%rbx), %r9d */
-		};
-
 		static const char *const f32_movs[] = {
 			"\xf3\x0f\x10\x83", /* movss  N(%rbx),%xmm0 */
 			"\xf3\x0f\x10\x8b", /* movss  N(%rbx),%xmm1 */
@@ -3167,11 +3173,7 @@ char *wasmjit_compile_invoker_offset(struct FuncType *type,
 		if ((type->input_types[i] == VALTYPE_I32 ||
 		     type->input_types[i] == VALTYPE_I64) &&
 		    n_movs < 6) {
-			if (type->input_types[i] == VALTYPE_I32) {
-				OUTS(movs_32[n_movs]);
-			} else {
-				OUTS(movs[n_movs]);
-			}
+			OUTS(movs[n_movs]);
 			encode_le_uint32_t(i * 8, buf);
 			if (!output_buf(output, buf, sizeof(uint32_t)))
 				goto error;
