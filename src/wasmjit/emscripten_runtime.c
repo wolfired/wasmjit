@@ -3553,6 +3553,19 @@ uint32_t wasmjit_emscripten____syscall340(uint32_t which, uint32_t varargs,
 	return ret;
 }
 
+/* mmap2 */
+uint32_t wasmjit_emscripten____syscall192(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	(void)which;
+	(void)varargs;
+	(void)funcinst;
+	/* mmap()'s semantics in a WASM context are currently not clear.
+	   additionally, an in-kernel implementation for file mapping requires
+	   more invasive changes to the kernel. */
+	return -EM_ENOSYS;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
