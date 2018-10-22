@@ -46,7 +46,7 @@ typedef unsigned int nfds_t;
 #define FD_CLR(d, s)   ((s)->fds_bits[(d)/(8*sizeof(long))] &= ~(1UL<<((d)%(8*sizeof(long)))))
 #define FD_ISSET(d, s) !!((s)->fds_bits[(d)/(8*sizeof(long))] & (1UL<<((d)%(8*sizeof(long)))))
 
-#define st_get_nsec(m, st) (st.st_ ## m ## time_nsec)
+#define st_get_nsec(m, st) ((st)->st_ ## m ## time_nsec)
 
 #else
 
@@ -63,7 +63,7 @@ typedef unsigned int nfds_t;
 #include <sys/stat.h>
 
 #if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809
-#define st_get_nsec(m, st) (st.st_ ## m ## tim.tv_nsec)
+#define st_get_nsec(m, st) ((st)->st_ ## m ## tim.tv_nsec)
 #else
 #define st_get_nsec(m, st) 0
 #endif
@@ -108,6 +108,7 @@ long sys_prlimit(pid_t pid, unsigned int resource,
 		 struct rlimit *old_limit);
 
 #define sys_stat sys_newstat
+#define sys_lstat sys_newlstat
 
 #else
 

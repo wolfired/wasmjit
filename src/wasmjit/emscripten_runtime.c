@@ -3617,6 +3617,80 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 	return check_ret(sys_ftruncate(args.fd, args.length));
 }
 
+static int32_t write_stat(char *base,
+			  uint32_t dest_addr,
+			  struct stat *st)
+{
+	uint32_t scratch;
+	char *base2 = base + dest_addr;
+
+#if defined(__GNUC__)
+#define ISUNSIGNED(a) ((typeof(a))0 - 1 > 0)
+#else
+#define ISUNSIGNED(a) ((a) >= 0 && ~(a) >= 0)
+#endif
+
+#define OVERFLOWS(a) (ISUNSIGNED(a)					\
+		      ? (a) > UINT32_MAX				\
+		      : ((a) < INT32_MIN || (a) > INT32_MAX))
+
+	if (OVERFLOWS(st->st_ino))
+		return -EM_EOVERFLOW;
+	scratch = uint32_t_swap_bytes(st->st_ino);
+	memcpy(base2 + offsetof(struct em_stat64, __st_ino_truncated),
+	       &scratch, sizeof(scratch));
+
+#define SETST(__e)						\
+	if (OVERFLOWS(st->st_ ## __e))				\
+		return -EM_EOVERFLOW;				\
+	scratch = uint32_t_swap_bytes(st->st_ ## __e);		\
+	memcpy(base2 + offsetof(struct em_stat64, st_ ## __e),	\
+	       &scratch, sizeof(scratch))
+
+	SETST(dev);
+	SETST(mode);
+	SETST(nlink);
+	SETST(uid);
+	SETST(gid);
+	SETST(rdev);
+	SETST(size);
+	SETST(blksize);
+	SETST(blocks);
+	SETST(ino);
+
+#undef SETST
+
+	/* NB: st_get_nsec() is a custom portable macro we define */
+#define STSTTIM(__e)							\
+	do {								\
+		if (OVERFLOWS(st->st_ ## __e ## time))			\
+			return -EM_EOVERFLOW;				\
+		scratch =						\
+			uint32_t_swap_bytes(st->st_ ## __e ## time);	\
+		memcpy(base2 + offsetof(struct em_stat64, st_ ## __e ## tim) + \
+		       offsetof(struct em_timespec, tv_sec), &scratch,	\
+		       sizeof(scratch));				\
+		if (OVERFLOWS(st_get_nsec(__e, st)))			\
+			return -EM_EOVERFLOW;				\
+		scratch =						\
+			uint32_t_swap_bytes(st_get_nsec(__e, st));	\
+		memcpy(base2 + offsetof(struct em_stat64, st_ ## __e ## tim) + \
+		       offsetof(struct em_timespec, tv_nsec), &scratch, \
+		       sizeof(scratch));				\
+	} while (0)
+
+	STSTTIM(a);
+	STSTTIM(m);
+	STSTTIM(c);
+
+#undef STSTTIM
+#undef CAST
+#undef OVERFLOWS
+#undef ISUNSIGNED
+
+	return 0;
+}
+
 /* stat64 */
 uint32_t wasmjit_emscripten____syscall195(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
@@ -3639,74 +3713,39 @@ uint32_t wasmjit_emscripten____syscall195(uint32_t which, uint32_t varargs,
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
-#if defined(__GNUC__)
-#define ISUNSIGNED(a) ((typeof(a))0 - 1 > 0)
-#else
-#define ISUNSIGNED(a) ((a) >= 0 && ~(a) >= 0)
-#endif
-
-#define OVERFLOWS(a) (ISUNSIGNED(a)					\
-		      ? (a) > UINT32_MAX				\
-		      : ((a) < INT32_MIN || (a) > INT32_MAX))
-
 	ret = check_ret(sys_stat(base + args.pathname, &st));
 	if (ret >= 0) {
-		uint32_t scratch;
-		char *base2 = base + args.buf;
+		ret = write_stat(base, args.buf, &st);
+	}
 
-		if (OVERFLOWS(st.st_ino))
-			return -EM_EOVERFLOW;
-		scratch = uint32_t_swap_bytes(st.st_ino);
-		memcpy(base2 + offsetof(struct em_stat64, __st_ino_truncated),
-		       &scratch, sizeof(scratch));
+	return ret;
+}
 
-#define SETST(__e)							\
-		if (OVERFLOWS(st.st_ ## __e))				\
-			return -EM_EOVERFLOW;				\
-		scratch = uint32_t_swap_bytes(st.st_ ## __e);		\
-		memcpy(base2 + offsetof(struct em_stat64, st_ ## __e), \
-		       &scratch, sizeof(scratch))
+/* lstat64 */
+uint32_t wasmjit_emscripten____syscall196(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	int32_t ret;
+	struct stat st;
+	char *base;
 
-		SETST(dev);
-		SETST(mode);
-		SETST(nlink);
-		SETST(uid);
-		SETST(gid);
-		SETST(rdev);
-		SETST(size);
-		SETST(blksize);
-		SETST(blocks);
-		SETST(ino);
+	LOAD_ARGS(funcinst, varargs, 2,
+		  uint32_t, pathname,
+		  uint32_t, buf);
 
-#undef SETST
+	(void)which;
 
-		/* NB: st_get_nsec() is a custom portable macro we define */
-#define STSTTIM(__e)							\
-		do {							\
-			if (OVERFLOWS(st.st_ ## __e ## time))		\
-				return -EM_EOVERFLOW;			\
-			scratch =					\
-				uint32_t_swap_bytes(st.st_ ## __e ## time); \
-			memcpy(base2 + offsetof(struct em_stat64, st_ ## __e ## tim) + \
-			       offsetof(struct em_timespec, tv_sec), &scratch, \
-			       sizeof(scratch));			\
-			if (OVERFLOWS(st_get_nsec(__e, st)))		\
-				return -EM_EOVERFLOW;			\
-			scratch =					\
-				uint32_t_swap_bytes(st_get_nsec(__e, st)); \
-			memcpy(base2 + offsetof(struct em_stat64, st_ ## __e ## tim) + \
-			       offsetof(struct em_timespec, tv_nsec), &scratch, \
-			       sizeof(scratch));			\
-		} while (0)
+	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
+		return -EM_EFAULT;
 
-		STSTTIM(a);
-		STSTTIM(m);
-		STSTTIM(c);
+	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, sizeof(struct em_stat64)))
+		return -EM_EFAULT;
 
-#undef STSTTIM
-#undef CAST
-#undef OVERFLOWS
-#undef ISUNSIGNED
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	ret = check_ret(sys_lstat(base + args.pathname, &st));
+	if (ret >= 0) {
+		ret = write_stat(base, args.buf, &st);
 	}
 
 	return ret;
