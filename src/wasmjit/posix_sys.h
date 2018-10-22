@@ -33,6 +33,7 @@
 #include <linux/limits.h>
 #include <linux/socket.h>
 #include <linux/poll.h>
+#include <linux/stat.h>
 
 typedef int socklen_t;
 typedef struct user_msghdr user_msghdr_t;
@@ -44,6 +45,8 @@ typedef unsigned int nfds_t;
 #define FD_SET(d, s)   ((s)->fds_bits[(d)/(8*sizeof(long))] |= (1UL<<((d)%(8*sizeof(long)))))
 #define FD_CLR(d, s)   ((s)->fds_bits[(d)/(8*sizeof(long))] &= ~(1UL<<((d)%(8*sizeof(long)))))
 #define FD_ISSET(d, s) !!((s)->fds_bits[(d)/(8*sizeof(long))] & (1UL<<((d)%(8*sizeof(long)))))
+
+#define st_get_nsec(m, st) (st.st_ ## m ## time_nsec)
 
 #else
 
@@ -57,6 +60,13 @@ typedef unsigned int nfds_t;
 #include <sys/un.h>
 #include <net/if.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
+
+#if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809
+#define st_get_nsec(m, st) (st.st_ ## m ## tim.tv_nsec)
+#else
+#define st_get_nsec(m, st) 0
+#endif
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -96,6 +106,8 @@ typedef struct msghdr user_msghdr_t;
 long sys_prlimit(pid_t pid, unsigned int resource,
 		 const struct rlimit *new_limit,
 		 struct rlimit *old_limit);
+
+#define sys_stat sys_newstat
 
 #else
 

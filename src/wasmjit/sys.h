@@ -147,6 +147,7 @@ static char *strdup(const char *s)
 
 #define PRIx32 "x"
 #define PRIu32 "u"
+#define UINT32_MAX 4294967295
 #define INT32_MAX 2147483647
 #define INT32_MIN (-2147483648)
 

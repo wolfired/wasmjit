@@ -40,3 +40,4 @@ KWSC4(, pwritev, int, const struct iovec *, int, off_t)
 KWSC2(, getrlimit, int, struct rlimit *)
 KWSC4(, prlimit, int, int, const struct rlimit *, struct rlimit *)
 KWSC2(, ftruncate, int, off_t);
+KWSC2(, stat, const char *, struct stat *);

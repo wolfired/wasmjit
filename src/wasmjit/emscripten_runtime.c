@@ -1639,6 +1639,44 @@ struct em_rlimit {
 	uint64_t rlim_max;
 };
 
+typedef uint32_t em_dev_t;
+typedef int32_t em_int;
+typedef int32_t em_long;
+typedef uint32_t em_mode_t;
+typedef uint32_t em_nlink_t;
+typedef uint32_t em_uid_t;
+typedef uint32_t em_gid_t;
+typedef uint32_t em_rdev_t;
+typedef uint32_t em_off_t;
+typedef uint32_t em_blksize_t;
+typedef uint32_t em_blkcnt_t;
+typedef uint32_t em_ino_t;
+typedef uint32_t em_time_t;
+
+struct em_timespec {
+	em_time_t tv_sec;
+	em_long tv_nsec;
+};
+
+struct em_stat64 {
+	em_dev_t st_dev;
+	em_int __st_dev_padding;
+	em_long __st_ino_truncated;
+	em_mode_t st_mode;
+	em_nlink_t st_nlink;
+	em_uid_t st_uid;
+	em_gid_t st_gid;
+	em_dev_t st_rdev;
+	em_int __st_rdev_padding;
+	em_off_t st_size;
+	em_blksize_t st_blksize;
+	em_blkcnt_t st_blocks;
+	struct em_timespec st_atim;
+	struct em_timespec st_mtim;
+	struct em_timespec st_ctim;
+	em_ino_t st_ino;
+};
+
 struct linux_ucred {
 	uint32_t pid;
 	uint32_t uid;
@@ -3577,6 +3615,88 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 	(void)which;
 
 	return check_ret(sys_ftruncate(args.fd, args.length));
+}
+
+/* stat64 */
+uint32_t wasmjit_emscripten____syscall195(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	int32_t ret;
+	struct stat st;
+	char *base;
+
+	LOAD_ARGS(funcinst, varargs, 2,
+		  uint32_t, pathname,
+		  uint32_t, buf);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
+		return -EM_EFAULT;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, sizeof(struct em_stat64)))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	ret = check_ret(sys_stat(base + args.pathname, &st));
+	if (ret >= 0) {
+		uint32_t scratch;
+		char *base2 = base + args.buf;
+
+		if (st.st_ino > UINT32_MAX)
+			return -EM_EOVERFLOW;
+		scratch = uint32_t_swap_bytes(st.st_ino);
+		memcpy(base2 + offsetof(struct em_stat64, __st_ino_truncated),
+		       &scratch, sizeof(scratch));
+
+#define SETST(__e)							\
+		if (st.st_ ## __e > UINT32_MAX)				\
+			return -EM_EOVERFLOW;				\
+		scratch = uint32_t_swap_bytes(st.st_ ## __e);		\
+		memcpy(base2 + offsetof(struct em_stat64, st_ ## __e), \
+		       &scratch, sizeof(scratch))
+
+		SETST(dev);
+		SETST(mode);
+		SETST(nlink);
+		SETST(uid);
+		SETST(gid);
+		SETST(rdev);
+		SETST(size);
+		SETST(blksize);
+		SETST(blocks);
+		SETST(ino);
+
+#undef SETST
+
+		/* NB: st_get_nsec() is a custom portable macro we define */
+#define STSTTIM(__e)							\
+		do {							\
+			if (st.st_ ## __e ## time > UINT32_MAX)		\
+				return -EM_EOVERFLOW;			\
+			scratch =					\
+				uint32_t_swap_bytes(st.st_ ## __e ## time); \
+			memcpy(base2 + offsetof(struct em_stat64, st_ ## __e ## tim) + \
+			       offsetof(struct em_timespec, tv_sec), &scratch, \
+			       sizeof(scratch));			\
+			if (st_get_nsec(__e, st) > UINT32_MAX)		\
+				return -EM_EOVERFLOW;			\
+			scratch =					\
+				uint32_t_swap_bytes(st_get_nsec(__e, st)); \
+			memcpy(base2 + offsetof(struct em_stat64, st_ ## __e ## tim) + \
+			       offsetof(struct em_timespec, tv_nsec), &scratch, \
+			       sizeof(scratch));			\
+		} while (0)
+
+		STSTTIM(a);
+		STSTTIM(m);
+		STSTTIM(c);
+
+#undef STSTTIM
+	}
+
+	return ret;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
