@@ -84,6 +84,14 @@ typedef struct msghdr user_msghdr_t;
 
 #define __KDECL(to,n,t) t _##n
 
+#define VOID0 void
+#define VOID1
+#define VOID2
+#define VOID3
+#define VOID4
+#define VOID5
+#define VOID6
+
 #define KWSC0(f, ...) KWSCx(0, f, __VA_ARGS__)
 #define KWSC1(f, ...) KWSCx(1, f, __VA_ARGS__)
 #define KWSC2(f, ...) KWSCx(2, f, __VA_ARGS__)
@@ -94,7 +102,7 @@ typedef struct msghdr user_msghdr_t;
 
 #ifdef __KERNEL__
 
-#define KWSCx(_n, _pre, _name, ...) extern long (*_pre ## sys_ ## _name)(__KMAP(_n, __KDECL, __VA_ARGS__));
+#define KWSCx(_n, err, _pre, _name, ...) extern long (*_pre ## sys_ ## _name)(__KMAP(_n, __KDECL, __VA_ARGS__) VOID##_n);
 
 #include <wasmjit/posix_sys_linux_kernel_def.h>
 
@@ -129,5 +137,13 @@ long sys_prlimit(pid_t pid, unsigned int resource,
 #undef KWSC6
 #undef KWSCx
 #undef __KDECL
+#undef VOID0
+#undef VOID1
+#undef VOID2
+#undef VOID3
+#undef VOID4
+#undef VOID5
+#undef VOID6
+
 
 #endif

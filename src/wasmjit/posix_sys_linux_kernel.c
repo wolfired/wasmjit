@@ -41,7 +41,15 @@
 #define KWSC5(f, ...) KWSCx(5, f, __VA_ARGS__)
 #define KWSC6(f, ...) KWSCx(6, f, __VA_ARGS__)
 
-#define KWSCx(x, err, pre, name, ...) long (*pre ## sys_ ## name)(__KMAP(x, __KT, __VA_ARGS__));
+#define VOID0 void
+#define VOID1
+#define VOID2
+#define VOID3
+#define VOID4
+#define VOID5
+#define VOID6
+
+#define KWSCx(x, err, pre, name, ...) long (*pre ## sys_ ## name)(__KMAP(x, __KT, __VA_ARGS__) VOID##x);
 
 #include <wasmjit/posix_sys_linux_kernel_def.h>
 
@@ -57,7 +65,7 @@ static struct {
 
 #undef KWSCx
 #define KWSCx(x, err, pre, name, ...)					\
-	long sys_ ## name ## _regs(__KMAP(x, __KDECL, __VA_ARGS__))	\
+	long sys_ ## name ## _regs(__KMAP(x, __KDECL, __VA_ARGS__) VOID##x) \
 	{								\
 		struct pt_regs *vals = &wasmjit_get_ktls()->regs;	\
 		__KMAP(x, __KSET, di, si, dx, cx, r8, r9);		\
