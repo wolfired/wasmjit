@@ -96,10 +96,18 @@ enum {
 #endif
 
 /* error codes are the same for these targets */
+/* issigned == 0 implies no error */
 #if (defined(__KERNEL__) || defined(__linux__)) && defined(__x86_64__)
 
-static int32_t check_ret(long errno_)
+static int32_t check_ret_signed(long errno_, int issigned)
 {
+	if (!issigned) {
+#if __LONG_WIDTH__ > 32
+		if ((unsigned long) errno_ > UINT32_MAX)
+			wasmjit_trap(WASMJIT_TRAP_INTEGER_OVERFLOW);
+#endif
+		return (unsigned long) errno_;
+	}
 #if __LONG_WIDTH__ > 32
 	if (errno_ < -2147483648)
 		wasmjit_trap(WASMJIT_TRAP_INTEGER_OVERFLOW);
@@ -113,7 +121,7 @@ static int32_t check_ret(long errno_)
 
 #else
 
-static int32_t check_ret(long errno_)
+static int32_t check_ret_signed(long errno_, int issigned)
 {
 	static int32_t to_sys_errno[] = {
 #define ERRNO(name, value) [name] = -value,
@@ -122,6 +130,14 @@ static int32_t check_ret(long errno_)
 	};
 
 	int32_t toret;
+
+	if (!issigned) {
+#if __LONG_WIDTH__ > 32
+		if ((unsigned long) errno_ > UINT32_MAX)
+			wasmjit_trap(WASMJIT_TRAP_INTEGER_OVERFLOW);
+#endif
+		return (unsigned long) errno_;
+	}
 
 	if (errno_ >= 0) {
 #if __LONG_WIDTH__ > 32
@@ -148,6 +164,8 @@ static int32_t check_ret(long errno_)
 }
 
 #endif
+
+#define check_ret(errno_) check_ret_signed((errno_), 1)
 
 static int wasmjit_emscripten_check_range(struct MemInst *meminst,
 					  uint32_t user_ptr,
@@ -3785,7 +3803,7 @@ uint32_t wasmjit_emscripten____syscall199(uint32_t which, uint32_t varargs,
 	(void)which;
 	(void)varargs;
 	(void)funcinst;
-	return check_ret(sys_getuid());
+	return check_ret_signed(sys_getuid(), 0);
 }
 
 /* getgid32 */
@@ -3795,7 +3813,7 @@ uint32_t wasmjit_emscripten____syscall200(uint32_t which, uint32_t varargs,
 	(void)which;
 	(void)varargs;
 	(void)funcinst;
-	return check_ret(sys_getgid());
+	return check_ret_signed(sys_getgid(), 0);
 }
 
 /* getegid32 */
@@ -3805,7 +3823,7 @@ uint32_t wasmjit_emscripten____syscall202(uint32_t which, uint32_t varargs,
 	(void)which;
 	(void)varargs;
 	(void)funcinst;
-	return check_ret(sys_getegid());
+	return check_ret_signed(sys_getegid(), 0);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
