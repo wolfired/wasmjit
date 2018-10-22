@@ -3639,19 +3639,29 @@ uint32_t wasmjit_emscripten____syscall195(uint32_t which, uint32_t varargs,
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
+#if defined(__GNUC__)
+#define ISUNSIGNED(a) ((typeof(a))0 - 1 > 0)
+#else
+#define ISUNSIGNED(a) ((a) >= 0 && ~(a) >= 0)
+#endif
+
+#define OVERFLOWS(a) (ISUNSIGNED(a)					\
+		      ? (a) > UINT32_MAX				\
+		      : ((a) < INT32_MIN || (a) > INT32_MAX))
+
 	ret = check_ret(sys_stat(base + args.pathname, &st));
 	if (ret >= 0) {
 		uint32_t scratch;
 		char *base2 = base + args.buf;
 
-		if (st.st_ino > UINT32_MAX)
+		if (OVERFLOWS(st.st_ino))
 			return -EM_EOVERFLOW;
 		scratch = uint32_t_swap_bytes(st.st_ino);
 		memcpy(base2 + offsetof(struct em_stat64, __st_ino_truncated),
 		       &scratch, sizeof(scratch));
 
 #define SETST(__e)							\
-		if (st.st_ ## __e > UINT32_MAX)				\
+		if (OVERFLOWS(st.st_ ## __e))				\
 			return -EM_EOVERFLOW;				\
 		scratch = uint32_t_swap_bytes(st.st_ ## __e);		\
 		memcpy(base2 + offsetof(struct em_stat64, st_ ## __e), \
@@ -3673,14 +3683,14 @@ uint32_t wasmjit_emscripten____syscall195(uint32_t which, uint32_t varargs,
 		/* NB: st_get_nsec() is a custom portable macro we define */
 #define STSTTIM(__e)							\
 		do {							\
-			if (st.st_ ## __e ## time > UINT32_MAX)		\
+			if (OVERFLOWS(st.st_ ## __e ## time))		\
 				return -EM_EOVERFLOW;			\
 			scratch =					\
 				uint32_t_swap_bytes(st.st_ ## __e ## time); \
 			memcpy(base2 + offsetof(struct em_stat64, st_ ## __e ## tim) + \
 			       offsetof(struct em_timespec, tv_sec), &scratch, \
 			       sizeof(scratch));			\
-			if (st_get_nsec(__e, st) > UINT32_MAX)		\
+			if (OVERFLOWS(st_get_nsec(__e, st)))		\
 				return -EM_EOVERFLOW;			\
 			scratch =					\
 				uint32_t_swap_bytes(st_get_nsec(__e, st)); \
@@ -3694,6 +3704,9 @@ uint32_t wasmjit_emscripten____syscall195(uint32_t which, uint32_t varargs,
 		STSTTIM(c);
 
 #undef STSTTIM
+#undef CAST
+#undef OVERFLOWS
+#undef ISUNSIGNED
 	}
 
 	return ret;
