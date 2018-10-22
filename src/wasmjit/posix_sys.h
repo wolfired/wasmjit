@@ -84,6 +84,7 @@ typedef struct msghdr user_msghdr_t;
 
 #define __KDECL(to,n,t) t _##n
 
+#define KWSC0(pre, name, ...) KWSCx(0, pre, name, __VA_ARGS__)
 #define KWSC1(pre, name, ...) KWSCx(1, pre, name, __VA_ARGS__)
 #define KWSC2(pre, name, ...) KWSCx(2, pre, name, __VA_ARGS__)
 #define KWSC3(pre, name, ...) KWSCx(3, pre, name, __VA_ARGS__)
@@ -119,6 +120,7 @@ long sys_prlimit(pid_t pid, unsigned int resource,
 
 #endif
 
+#undef KWSC0
 #undef KWSC1
 #undef KWSC2
 #undef KWSC3

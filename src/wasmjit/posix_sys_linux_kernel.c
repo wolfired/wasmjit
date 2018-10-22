@@ -33,6 +33,7 @@
 #define __KINIT(to,n,t) . t = (unsigned long) _##n
 #define __KSET(to,n,t) vals-> t = (unsigned long) _##n
 
+#define KWSC0(pre, name, ...) KWSCx(0, pre, name, __VA_ARGS__)
 #define KWSC1(pre, name, ...) KWSCx(1, pre, name, __VA_ARGS__)
 #define KWSC2(pre, name, ...) KWSCx(2, pre, name, __VA_ARGS__)
 #define KWSC3(pre, name, ...) KWSCx(3, pre, name, __VA_ARGS__)
