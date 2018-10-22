@@ -58,23 +58,26 @@ int prlimit(int pid, int resource,
 #define __KDECL(to,n,t) t _##n
 #define __KA(to,n,t) _##n
 
-#define KWSCx(x, pre, name, ...)					\
+#define KWSCx(x, err, pre, name, ...)					\
 	long pre ## sys_ ## name(__KMAP(x, __KDECL, __VA_ARGS__))	\
 	{							\
-		long ret;					\
+		int ret;					\
 		ret = name(__KMAP(x, __KA, __VA_ARGS__));	\
+		if (!(err)) {					\
+			return (unsigned) ret;			\
+		}						\
 		if (ret == -1) {				\
 			ret = -errno;				\
 		}						\
 		return ret;					\
 	}
 
-#define KWSC0(pre, name, ...) KWSCx(0, pre, name, __VA_ARGS__)
-#define KWSC1(pre, name, ...) KWSCx(1, pre, name, __VA_ARGS__)
-#define KWSC2(pre, name, ...) KWSCx(2, pre, name, __VA_ARGS__)
-#define KWSC3(pre, name, ...) KWSCx(3, pre, name, __VA_ARGS__)
-#define KWSC4(pre, name, ...) KWSCx(4, pre, name, __VA_ARGS__)
-#define KWSC5(pre, name, ...) KWSCx(5, pre, name, __VA_ARGS__)
-#define KWSC6(pre, name, ...) KWSCx(6, pre, name, __VA_ARGS__)
+#define KWSC0(f, ...) KWSCx(0, f, __VA_ARGS__)
+#define KWSC1(f, ...) KWSCx(1, f, __VA_ARGS__)
+#define KWSC2(f, ...) KWSCx(2, f, __VA_ARGS__)
+#define KWSC3(f, ...) KWSCx(3, f, __VA_ARGS__)
+#define KWSC4(f, ...) KWSCx(4, f, __VA_ARGS__)
+#define KWSC5(f, ...) KWSCx(5, f, __VA_ARGS__)
+#define KWSC6(f, ...) KWSCx(6, f, __VA_ARGS__)
 
 #include <wasmjit/posix_sys_posix_def.h>

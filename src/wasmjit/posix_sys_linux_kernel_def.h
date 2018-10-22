@@ -24,24 +24,24 @@
 /* common definitions */
 #include <wasmjit/posix_sys_def.h>
 
-KWSC3(, lseek, unsigned int, off_t, unsigned int)
-KWSC3(, writev, unsigned long, const struct iovec *, unsigned long)
-KWSC3(, write, unsigned int, const void *, size_t)
-KWSC1(, close, unsigned int)
-KWSC6(, sendto, int, const void *, size_t, unsigned int, const struct sockaddr *, int)
-KWSC6(, recvfrom, int, void *, size_t, unsigned int, struct sockaddr *, int *)
-KWSC3(, sendmsg, int, const user_msghdr_t *, unsigned int)
-KWSC3(, recvmsg, int, user_msghdr_t *, unsigned int)
-KWSC3(, read, unsigned int, void *, size_t)
-KWSC3(, readv, unsigned long, const struct iovec *, unsigned long)
-KWSC2(, chmod, const char *, umode_t)
-KWSC5(_, preadv, unsigned long, const struct iovec *,
+KWSC3(1, , lseek, unsigned int, off_t, unsigned int)
+KWSC3(1, , writev, unsigned long, const struct iovec *, unsigned long)
+KWSC3(1, , write, unsigned int, const void *, size_t)
+KWSC1(1, , close, unsigned int)
+KWSC6(1, , sendto, int, const void *, size_t, unsigned int, const struct sockaddr *, int)
+KWSC6(1, , recvfrom, int, void *, size_t, unsigned int, struct sockaddr *, int *)
+KWSC3(1, , sendmsg, int, const user_msghdr_t *, unsigned int)
+KWSC3(1, , recvmsg, int, user_msghdr_t *, unsigned int)
+KWSC3(1, , read, unsigned int, void *, size_t)
+KWSC3(1, , readv, unsigned long, const struct iovec *, unsigned long)
+KWSC2(1, , chmod, const char *, umode_t)
+KWSC5(1, _, preadv, unsigned long, const struct iovec *,
       unsigned long, unsigned long, unsigned long)
-KWSC5(_, pwritev, unsigned long, const struct iovec *,
+KWSC5(1, _, pwritev, unsigned long, const struct iovec *,
       unsigned long, unsigned long, unsigned long)
-KWSC2(, getrlimit, unsigned int, struct rlimit *)
-KWSC4(, prlimit64, pid_t, unsigned int, const struct rlimit64 *, struct rlimit64 *)
-KWSC2(, ftruncate, unsigned int, unsigned long);
-KWSC2(, newstat, const char *, struct stat *);
-KWSC2(, newlstat, const char *, struct stat *);
-KWSC2(, newfstat, unsigned int, struct stat *);
+KWSC2(1, , getrlimit, unsigned int, struct rlimit *)
+KWSC4(1, , prlimit64, pid_t, unsigned int, const struct rlimit64 *, struct rlimit64 *)
+KWSC2(1, , ftruncate, unsigned int, unsigned long);
+KWSC2(1, , newstat, const char *, struct stat *);
+KWSC2(1, , newlstat, const char *, struct stat *);
+KWSC2(1, , newfstat, unsigned int, struct stat *);

@@ -84,13 +84,13 @@ typedef struct msghdr user_msghdr_t;
 
 #define __KDECL(to,n,t) t _##n
 
-#define KWSC0(pre, name, ...) KWSCx(0, pre, name, __VA_ARGS__)
-#define KWSC1(pre, name, ...) KWSCx(1, pre, name, __VA_ARGS__)
-#define KWSC2(pre, name, ...) KWSCx(2, pre, name, __VA_ARGS__)
-#define KWSC3(pre, name, ...) KWSCx(3, pre, name, __VA_ARGS__)
-#define KWSC4(pre, name, ...) KWSCx(4, pre, name, __VA_ARGS__)
-#define KWSC5(pre, name, ...) KWSCx(5, pre, name, __VA_ARGS__)
-#define KWSC6(pre, name, ...) KWSCx(6, pre, name, __VA_ARGS__)
+#define KWSC0(f, ...) KWSCx(0, f, __VA_ARGS__)
+#define KWSC1(f, ...) KWSCx(1, f, __VA_ARGS__)
+#define KWSC2(f, ...) KWSCx(2, f, __VA_ARGS__)
+#define KWSC3(f, ...) KWSCx(3, f, __VA_ARGS__)
+#define KWSC4(f, ...) KWSCx(4, f, __VA_ARGS__)
+#define KWSC5(f, ...) KWSCx(5, f, __VA_ARGS__)
+#define KWSC6(f, ...) KWSCx(6, f, __VA_ARGS__)
 
 #ifdef __KERNEL__
 
@@ -114,7 +114,7 @@ long sys_prlimit(pid_t pid, unsigned int resource,
 
 #else
 
-#define KWSCx(_n, _pre, _name, ...) long _pre ## sys_ ## _name(__KMAP(_n, __KDECL, __VA_ARGS__));
+#define KWSCx(_n, err, _pre, _name, ...) long _pre ## sys_ ## _name(__KMAP(_n, __KDECL, __VA_ARGS__));
 
 #include <wasmjit/posix_sys_posix_def.h>
 

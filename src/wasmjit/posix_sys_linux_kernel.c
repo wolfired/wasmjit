@@ -33,15 +33,15 @@
 #define __KINIT(to,n,t) . t = (unsigned long) _##n
 #define __KSET(to,n,t) vals-> t = (unsigned long) _##n
 
-#define KWSC0(pre, name, ...) KWSCx(0, pre, name, __VA_ARGS__)
-#define KWSC1(pre, name, ...) KWSCx(1, pre, name, __VA_ARGS__)
-#define KWSC2(pre, name, ...) KWSCx(2, pre, name, __VA_ARGS__)
-#define KWSC3(pre, name, ...) KWSCx(3, pre, name, __VA_ARGS__)
-#define KWSC4(pre, name, ...) KWSCx(4, pre, name, __VA_ARGS__)
-#define KWSC5(pre, name, ...) KWSCx(5, pre, name, __VA_ARGS__)
-#define KWSC6(pre, name, ...) KWSCx(6, pre, name, __VA_ARGS__)
+#define KWSC0(f, ...) KWSCx(0, f, __VA_ARGS__)
+#define KWSC1(f, ...) KWSCx(1, f, __VA_ARGS__)
+#define KWSC2(f, ...) KWSCx(2, f, __VA_ARGS__)
+#define KWSC3(f, ...) KWSCx(3, f, __VA_ARGS__)
+#define KWSC4(f, ...) KWSCx(4, f, __VA_ARGS__)
+#define KWSC5(f, ...) KWSCx(5, f, __VA_ARGS__)
+#define KWSC6(f, ...) KWSCx(6, f, __VA_ARGS__)
 
-#define KWSCx(x, pre, name, ...) long (*pre ## sys_ ## name)(__KMAP(x, __KT, __VA_ARGS__));
+#define KWSCx(x, err, pre, name, ...) long (*pre ## sys_ ## name)(__KMAP(x, __KT, __VA_ARGS__));
 
 #include <wasmjit/posix_sys_linux_kernel_def.h>
 
@@ -49,14 +49,14 @@
 
 #ifdef __x86_64__
 
-#define KWSCx(x, pre, name, ...) long (*name)(struct pt_regs *);
+#define KWSCx(x, err, pre, name, ...) long (*name)(struct pt_regs *);
 
 static struct {
 #include <wasmjit/posix_sys_linux_kernel_def.h>
 } sctable_regs;
 
 #undef KWSCx
-#define KWSCx(x, pre, name, ...)					\
+#define KWSCx(x, err, pre, name, ...)					\
 	long sys_ ## name ## _regs(__KMAP(x, __KDECL, __VA_ARGS__))	\
 	{								\
 		struct pt_regs *vals = &wasmjit_get_ktls()->regs;	\
@@ -108,7 +108,7 @@ int posix_linux_kernel_init(void)
 {
 #ifdef SCPREFIX
 
-#define KWSCx(x, p, n, ...)						\
+#define KWSCx(x, e, p, n, ...)						\
 	do {								\
 		p ## sys_ ## n = (void *)kallsyms_lookup_name("sys_" #n);	\
 		if (!p ## sys_ ## n) {					\
@@ -122,7 +122,7 @@ int posix_linux_kernel_init(void)
 
 #else
 
-#define KWSCx(x, p, n, ...)					\
+#define KWSCx(x, e, p, n, ...)					\
 	do {							\
 		p ## sys_ ## n = (void *)kallsyms_lookup_name("sys_" #n);	\
 		if (!p ## sys_ ## n)					\
