@@ -109,6 +109,7 @@ long sys_prlimit(pid_t pid, unsigned int resource,
 
 #define sys_stat sys_newstat
 #define sys_lstat sys_newlstat
+#define sys_fstat sys_newfstat
 
 #else
 

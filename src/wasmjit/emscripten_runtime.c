@@ -3751,6 +3751,33 @@ uint32_t wasmjit_emscripten____syscall196(uint32_t which, uint32_t varargs,
 	return ret;
 }
 
+/* fstat64 */
+uint32_t wasmjit_emscripten____syscall197(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	int32_t ret;
+	struct stat st;
+	char *base;
+
+	LOAD_ARGS(funcinst, varargs, 2,
+		  int32_t, fd,
+		  uint32_t, buf);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, sizeof(struct em_stat64)))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	ret = check_ret(sys_fstat(args.fd, &st));
+	if (ret >= 0) {
+		ret = write_stat(base, args.buf, &st);
+	}
+
+	return ret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */

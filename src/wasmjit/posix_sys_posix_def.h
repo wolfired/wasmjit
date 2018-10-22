@@ -42,3 +42,4 @@ KWSC4(, prlimit, int, int, const struct rlimit *, struct rlimit *)
 KWSC2(, ftruncate, int, off_t);
 KWSC2(, stat, const char *, struct stat *);
 KWSC2(, lstat, const char *, struct stat *);
+KWSC2(, fstat, int, struct stat *);

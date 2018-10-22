@@ -44,3 +44,4 @@ KWSC4(, prlimit64, pid_t, unsigned int, const struct rlimit64 *, struct rlimit64
 KWSC2(, ftruncate, unsigned int, unsigned long);
 KWSC2(, newstat, const char *, struct stat *);
 KWSC2(, newlstat, const char *, struct stat *);
+KWSC2(, newfstat, unsigned int, struct stat *);
