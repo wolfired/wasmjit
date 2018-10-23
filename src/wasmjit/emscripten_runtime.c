@@ -3836,6 +3836,16 @@ uint32_t wasmjit_emscripten____syscall20(uint32_t which, uint32_t varargs,
 	return check_ret_signed(sys_getpid(), 0);
 }
 
+/* geteuid32 */
+uint32_t wasmjit_emscripten____syscall201(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	(void)which;
+	(void)varargs;
+	(void)funcinst;
+	return check_ret_signed(sys_geteuid(), 0);
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
