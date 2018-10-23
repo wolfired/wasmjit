@@ -3954,7 +3954,9 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 		pagemask -= 1;
 
 		/* then alloc appropriate buffer size */
-		dirbufsz = MMAX(args.count, st.st_blksize);
+		/* NB: POSIX says blksize_t shall be no larger than long */
+		assert(st.st_blksize >= 0);
+		dirbufsz = MMAX(args.count, (unsigned long) st.st_blksize);
 		dirbufsz = (dirbufsz + pagemask) & ~pagemask;
 		dirbuf = malloc(dirbufsz);
 		if (!dirbuf)
