@@ -91,6 +91,9 @@ typedef struct {
 	char d_name[1];
 } kernel_dirent64;
 
+#elif defined(__OpenBSD__)
+
+typedef struct dirent kernel_dirent64;
 
 #endif
 

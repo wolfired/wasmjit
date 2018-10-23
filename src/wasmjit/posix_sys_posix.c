@@ -65,6 +65,13 @@ int getdents64(int fd, void *buf, size_t nbytes)
 	return syscall(SYS_getdents64, fd, buf, nbytes);
 }
 
+#elif defined(__OpenBSD__)
+
+static int getdents64(int fd, void *buf, size_t nbytes)
+{
+	return getdents(fd, buf, nbytes);
+}
+
 #endif
 
 #define __KDECL(to,n,t) t _##n
