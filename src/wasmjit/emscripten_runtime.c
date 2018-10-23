@@ -4118,9 +4118,9 @@ static int check_flags(uint32_t flags)
 		EM_O_DIRECTORY |
 		EM_O_DSYNC |
 		EM_O_EXCL |
-#ifdef O_LARGEFILE
+		/* we check O_LARGEFILE manually,
+		   so unconditionally allow it */
 		EM_O_LARGEFILE |
-#endif
 #ifdef O_NOATIME
 		EM_O_NOATIME |
 #endif
@@ -4191,6 +4191,8 @@ uint32_t wasmjit_emscripten____syscall5(uint32_t which, uint32_t varargs,
 	char *base;
 	mode_t mode;
 	int flags;
+	int32_t ret;
+	uint32_t had_large_file;
 
 	LOAD_ARGS(funcinst, varargs, 3,
 		  uint32_t, pathname,
@@ -4202,6 +4204,8 @@ uint32_t wasmjit_emscripten____syscall5(uint32_t which, uint32_t varargs,
 	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
 		return -EM_EFAULT;
 
+	had_large_file = args.flags & EM_O_LARGEFILE;
+
 	if (!check_flags(args.flags))
 		return -EM_EINVAL;
 
@@ -4211,7 +4215,22 @@ uint32_t wasmjit_emscripten____syscall5(uint32_t which, uint32_t varargs,
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
-	return check_ret(sys_open(base + args.pathname, flags, mode));
+	ret = check_ret(sys_open(base + args.pathname, flags, mode));
+	if (ret >= 0) {
+		if (!had_large_file && sizeof(off_t) != 32) {
+			struct stat st;
+			long rret;
+			rret = sys_fstat(ret, &st);
+			if (rret < 0)
+				wasmjit_emscripten_internal_abort("Stat failed in __syscall5()");
+			if (st.st_size > INT32_MAX) {
+				sys_close(ret);
+				ret = -EM_EOVERFLOW;
+			}
+		}
+	}
+
+	return ret;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
