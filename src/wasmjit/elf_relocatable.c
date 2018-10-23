@@ -30,9 +30,15 @@
 
 #include <stdio.h>
 
-#ifdef __GLIBC__
+#if defined(__linux__) || defined(__OpenBSD__)
 
 #include <elf.h>
+
+#if defined(__OpenBSD__)
+
+#include <amd64/reloc.h>
+
+#endif
 
 struct Relocations {
 	size_t n_elts;
@@ -1432,7 +1438,7 @@ void *wasmjit_output_elf_relocatable(const char *module_name,
 
 	{
 		init_array_sec.sh_name = output->n_elts - shstrtab_section_start;
-		init_array_sec.sh_type = SHT_INIT_ARRAY;
+		init_array_sec.sh_type = SHT_PROGBITS;
 		init_array_sec.sh_flags = SHF_WRITE | SHF_ALLOC;
 		init_array_sec.sh_addr = 0;
 		init_array_sec.sh_offset = init_array_section_start;
@@ -1446,7 +1452,7 @@ void *wasmjit_output_elf_relocatable(const char *module_name,
 		       &init_array_sec,
 		       sizeof(init_array_sec));
 
-		OUT(".init_array", strlen(".init_array") + 1);
+		OUT(".ctors", strlen(".ctors") + 1);
 	}
 
 	{
@@ -1465,7 +1471,7 @@ void *wasmjit_output_elf_relocatable(const char *module_name,
 		       &rela_init_array_sec,
 		       sizeof(rela_init_array_sec));
 
-		OUT(".rela.init_array", strlen(".rela.init_array") + 1);
+		OUT(".rela.ctors", strlen(".rela.ctors") + 1);
 	}
 
 	{
