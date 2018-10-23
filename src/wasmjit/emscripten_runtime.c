@@ -3894,7 +3894,7 @@ uint32_t wasmjit_emscripten____syscall212(uint32_t which, uint32_t varargs,
 
 em_unsigned_char convert_dtype(em_unsigned_char d_type)
 {
-#ifdef IS_LINUX
+#if IS_LINUX
 	return d_type;
 #endif
 	switch (d_type) {
@@ -4140,7 +4140,7 @@ static int check_flags(uint32_t flags)
 
 static int convert_sys_flags(uint32_t flags)
 {
-#if defined(IS_LINUX) && defined(__x86_64__)
+#if IS_LINUX && defined(__x86_64__)
 	return flags;
 #else
 
