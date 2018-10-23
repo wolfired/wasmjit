@@ -4167,7 +4167,9 @@ static int convert_sys_flags(uint32_t flags)
 #ifdef O_LARGEFILE
 	CHK(LARGEFILE);
 #endif
+#ifdef O_NOATIME
 	CHK(NOATIME);
+#endif
 	CHK(NOCTTY);
 	CHK(NOFOLLOW);
 	CHK(NONBLOCK);
