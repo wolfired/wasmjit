@@ -3846,6 +3846,27 @@ uint32_t wasmjit_emscripten____syscall201(uint32_t which, uint32_t varargs,
 	return check_ret_signed(sys_geteuid(), 0);
 }
 
+/* chown */
+uint32_t wasmjit_emscripten____syscall212(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	char *base;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  uint32_t, pathname,
+		  uint32_t, owner,
+		  uint32_t, group);
+
+	(void)which;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
+		return -EM_EFAULT;
+
+	return check_ret(sys_chown(base + args.pathname, args.owner, args.group));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
