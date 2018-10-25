@@ -255,7 +255,7 @@ extern struct FuncInst WASM_FUNC_SYMBOL(asm, stackAlloc);
 extern struct FuncInst WASM_FUNC_SYMBOL(asm, ___errno_location) __attribute__((weak));
 extern struct FuncInst WASM_FUNC_SYMBOL(asm, ___emscripten_environ_constructor) __attribute__((weak));
 extern struct FuncInst WASM_FUNC_SYMBOL(asm, _malloc);
-extern struct FuncInst WASM_FUNC_SYMBOL(asm, _free);
+extern struct FuncInst WASM_FUNC_SYMBOL(asm, _free)  __attribute__((weak));
 
 __attribute__((constructor))
 static void init_module(void)
