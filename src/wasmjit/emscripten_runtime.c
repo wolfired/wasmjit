@@ -3920,27 +3920,29 @@ void wasmjit_emscripten_start_func(struct FuncInst *funcinst)
 void wasmjit_emscripten_derive_memory_globals(uint32_t static_bump,
 					      struct WasmJITEmscriptenMemoryGlobals *out)
 {
-
-#define staticAlloc(_top , s)                           \
-	(((_top) + (s) + 15) & ((uint32_t) -16))
-
 #define TOTAL_STACK 5242880
 #define STACK_ALIGN_V 16
 #define GLOBAL_BASE 1024
 #define STATIC_BASE GLOBAL_BASE
-#define STATICTOP (STATIC_BASE + static_bump)
 
-#define tempDoublePtr_V (staticAlloc(STATICTOP, 16))
-#define DYNAMICTOP_PTR_V (staticAlloc(tempDoublePtr_V, 4))
-#define STACKTOP_V (alignMemory(DYNAMICTOP_PTR_V, STACK_ALIGN_V))
-#define STACK_BASE_V (STACKTOP_V)
-#define STACK_MAX_V (STACK_BASE_V + TOTAL_STACK)
+	uint32_t STATICTOP = STATIC_BASE + static_bump;
+	uint32_t STACK_BASE;
+
+#define staticAlloc(_out, s)						\
+	do {								\
+		*(_out) = STATICTOP;					\
+		STATICTOP = (STATICTOP + (s) + 15) & ((uint32_t) -16);	\
+	} while (0)
 
 	out->memoryBase = STATIC_BASE;
-	out->DYNAMICTOP_PTR = DYNAMICTOP_PTR_V;
-	out->tempDoublePtr = tempDoublePtr_V;
-	out->STACKTOP =  STACKTOP_V;
-	out->STACK_MAX = STACK_MAX_V;
+
+	out->tempDoublePtr = STATICTOP;
+	STATICTOP += 16;
+
+	staticAlloc(&out->DYNAMICTOP_PTR, 4);
+
+	STACK_BASE = out->STACKTOP = alignMemory(STATICTOP, STACK_ALIGN_V);
+	out->STACK_MAX = STACK_BASE + TOTAL_STACK;
 }
 
 #ifdef __KERNEL__
