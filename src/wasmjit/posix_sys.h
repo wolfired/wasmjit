@@ -64,6 +64,7 @@ typedef struct linux_dirent64 kernel_dirent64;
 #include <net/if.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <dirent.h>
 
 #if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809

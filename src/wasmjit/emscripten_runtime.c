@@ -4081,6 +4081,137 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 	return ret;
 }
 
+#define EM_O_RDONLY 0
+#define EM_O_WRONLY 1
+#define EM_O_RDWR 2
+#define EM_O_APPEND 1024
+#define EM_O_ASYNC 8192
+#define EM_O_CLOEXEC 524288
+#define EM_O_CREAT 64
+#define EM_O_DIRECTORY 65536
+#define EM_O_DSYNC 4096
+#define EM_O_EXCL 128
+#define EM_O_LARGEFILE 32768
+#define EM_O_NOATIME 262144
+#define EM_O_NOCTTY 256
+#define EM_O_NOFOLLOW 131072
+#define EM_O_NONBLOCK 2048
+#define EM_O_PATH 2097152
+#define EM_O_SYNC 1052672
+#define EM_O_TMPFILE 4194304
+#define EM_O_TRUNC 512
+
+static int check_flags(uint32_t flags)
+{
+	uint32_t all =
+		EM_O_RDONLY |
+		EM_O_WRONLY |
+		EM_O_RDWR |
+		EM_O_APPEND |
+#ifdef O_ASYNC
+		EM_O_ASYNC |
+#endif
+		EM_O_CLOEXEC |
+		EM_O_CREAT |
+		EM_O_DIRECTORY |
+		EM_O_DSYNC |
+		EM_O_EXCL |
+#ifdef O_LARGEFILE
+		EM_O_LARGEFILE |
+#endif
+#ifdef O_NOATIME
+		EM_O_NOATIME |
+#endif
+		EM_O_NOCTTY |
+		EM_O_NOFOLLOW |
+		EM_O_NONBLOCK |
+#ifdef O_PATH
+		EM_O_PATH |
+#endif
+		EM_O_SYNC |
+#ifdef O_TMPFILE
+		EM_O_TMPFILE |
+#endif
+		EM_O_TRUNC |
+		0
+		;
+	return !(flags & ~all);
+}
+
+static int convert_sys_flags(uint32_t flags)
+{
+#if defined(IS_LINUX) && defined(__x86_64__)
+	return flags;
+#else
+
+	int oflags = 0;
+
+#define CHK(_n)					\
+	if (flags & EM_O_ ## _n)		\
+		oflags |= O_ ## _n
+
+	CHK(RDONLY);
+	CHK(WRONLY);
+	CHK(RDWR);
+	CHK(APPEND);
+#ifdef O_ASYNC
+	CHK(ASYNC);
+#endif
+	CHK(CLOEXEC);
+	CHK(CREAT);
+	CHK(DIRECTORY);
+	CHK(DSYNC);
+	CHK(EXCL);
+#ifdef O_LARGEFILE
+	CHK(LARGEFILE);
+#endif
+	CHK(NOATIME);
+	CHK(NOCTTY);
+	CHK(NOFOLLOW);
+	CHK(NONBLOCK);
+#ifdef O_PATH
+	CHK(PATH);
+#endif
+	CHK(SYNC);
+#ifdef O_TMPFILE
+	CHK(TMPFILE);
+#endif
+	CHK(TRUNC);
+
+	return oflags;
+#endif
+}
+
+/* open */
+uint32_t wasmjit_emscripten____syscall5(uint32_t which, uint32_t varargs,
+					struct FuncInst *funcinst)
+{
+	char *base;
+	mode_t mode;
+	int flags;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  uint32_t, pathname,
+		  uint32_t, flags,
+		  uint32_t, mode);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
+		return -EM_EFAULT;
+
+	if (!check_flags(args.flags))
+		return -EM_EINVAL;
+
+	flags = convert_sys_flags(args.flags);
+	/* POSIX requires specific mode values */
+	mode = args.mode;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	return check_ret(sys_open(base + args.pathname, flags, mode));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */

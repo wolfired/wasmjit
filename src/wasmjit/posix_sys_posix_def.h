@@ -44,3 +44,4 @@ KWSC2(1, , stat, const char *, struct stat *);
 KWSC2(1, , lstat, const char *, struct stat *);
 KWSC2(1, , fstat, int, struct stat *);
 KWSC3(1, , getdents64, int, void *, size_t)
+KWSC3(1, , open, const char *, int, mode_t)
