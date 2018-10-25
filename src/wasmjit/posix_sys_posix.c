@@ -61,10 +61,10 @@ int prlimit(int pid, int resource,
 #define KWSCx(x, err, pre, name, ...)					\
 	long pre ## sys_ ## name(__KMAP(x, __KDECL, __VA_ARGS__))	\
 	{							\
-		int ret;					\
+		long ret;					\
 		ret = name(__KMAP(x, __KA, __VA_ARGS__));	\
 		if (!(err)) {					\
-			return (unsigned) ret;			\
+			return ret;				\
 		}						\
 		if (ret == -1) {				\
 			ret = -errno;				\
