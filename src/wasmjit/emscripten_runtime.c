@@ -1666,7 +1666,7 @@ typedef uint32_t em_nlink_t;
 typedef uint32_t em_uid_t;
 typedef uint32_t em_gid_t;
 typedef uint32_t em_rdev_t;
-typedef uint32_t em_off_t;
+typedef int32_t em_off_t;
 typedef uint32_t em_blksize_t;
 typedef uint32_t em_blkcnt_t;
 typedef uint32_t em_ino_t;
