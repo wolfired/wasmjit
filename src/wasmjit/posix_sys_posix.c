@@ -55,6 +55,18 @@ int prlimit(int pid, int resource,
 
 #endif
 
+#if defined(__linux__)
+
+#include <unistd.h>
+#include <sys/syscall.h>
+
+int getdents64(int fd, void *buf, size_t nbytes)
+{
+	return syscall(SYS_getdents64, fd, buf, nbytes);
+}
+
+#endif
+
 #define __KDECL(to,n,t) t _##n
 #define __KA(to,n,t) _##n
 

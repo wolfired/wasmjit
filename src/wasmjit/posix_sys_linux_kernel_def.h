@@ -45,3 +45,4 @@ KWSC2(1, , ftruncate, unsigned int, unsigned long);
 KWSC2(1, , newstat, const char *, struct stat *);
 KWSC2(1, , newlstat, const char *, struct stat *);
 KWSC2(1, , newfstat, unsigned int, struct stat *);
+KWSC3(1, , getdents64, unsigned int, struct linux_dirent64 *, unsigned int)

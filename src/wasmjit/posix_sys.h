@@ -34,6 +34,7 @@
 #include <linux/socket.h>
 #include <linux/poll.h>
 #include <linux/stat.h>
+#include <linux/dirent.h>
 
 typedef int socklen_t;
 typedef struct user_msghdr user_msghdr_t;
@@ -48,6 +49,8 @@ typedef unsigned int nfds_t;
 
 #define st_get_nsec(m, st) ((st)->st_ ## m ## time_nsec)
 
+typedef struct linux_dirent64 kernel_dirent64;
+
 #else
 
 #include <errno.h>
@@ -61,6 +64,7 @@ typedef unsigned int nfds_t;
 #include <net/if.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 #if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809
 #define st_get_nsec(m, st) ((st)->st_ ## m ## tim.tv_nsec)
@@ -75,6 +79,19 @@ typedef unsigned int nfds_t;
 typedef struct msghdr user_msghdr_t;
 
 #define SYS_CMSG_NXTHDR(msg, cmsg) CMSG_NXTHDR((msg), (cmsg))
+
+#if defined(__linux__)
+
+typedef struct {
+	uint64_t d_ino;
+	int64_t d_off;
+	unsigned short d_reclen;
+	unsigned char d_type;
+	char d_name[1];
+} kernel_dirent64;
+
+
+#endif
 
 #endif
 

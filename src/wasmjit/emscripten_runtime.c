@@ -34,6 +34,12 @@
 #include <wasmjit/runtime.h>
 #include <wasmjit/sys.h>
 
+#if defined(__linux__) || defined(__KERNEL__)
+#define IS_LINUX 1
+#else
+#define IS_LINUX 0
+#endif
+
 #define STATIC_ASSERT(COND,MSG) typedef char static_assertion_##MSG[(COND)?1:-1]
 #define COMPILE_TIME_ASSERT3(X,L) STATIC_ASSERT(X,static_assertion_at_line_##L)
 #define COMPILE_TIME_ASSERT2(X,L) COMPILE_TIME_ASSERT3(X,L)
@@ -1671,6 +1677,8 @@ typedef uint32_t em_blksize_t;
 typedef uint32_t em_blkcnt_t;
 typedef uint32_t em_ino_t;
 typedef uint32_t em_time_t;
+typedef uint16_t em_unsigned_short;
+typedef uint8_t em_unsigned_char;
 
 struct em_timespec {
 	em_time_t tv_sec;
@@ -1694,6 +1702,14 @@ struct em_stat64 {
 	struct em_timespec st_mtim;
 	struct em_timespec st_ctim;
 	em_ino_t st_ino;
+};
+
+struct em_linux_dirent64 {
+	em_ino_t d_ino;
+	em_off_t d_off;
+	em_unsigned_short d_reclen;
+	em_unsigned_char d_type;
+	char d_name[1];
 };
 
 struct linux_ucred {
@@ -3636,12 +3652,6 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 	return check_ret(sys_ftruncate(args.fd, args.length));
 }
 
-static int32_t write_stat(char *base,
-			  uint32_t dest_addr,
-			  struct stat *st)
-{
-	uint32_t scratch;
-	char *base2 = base + dest_addr;
 
 #if defined(__GNUC__)
 #define ISUNSIGNED(a) ((typeof(a))0 - 1 > 0)
@@ -3652,6 +3662,13 @@ static int32_t write_stat(char *base,
 #define OVERFLOWS(a) (ISUNSIGNED(a)					\
 		      ? (a) > UINT32_MAX				\
 		      : ((a) < INT32_MIN || (a) > INT32_MAX))
+
+static int32_t write_stat(char *base,
+			  uint32_t dest_addr,
+			  struct stat *st)
+{
+	uint32_t scratch;
+	char *base2 = base + dest_addr;
 
 	if (OVERFLOWS(st->st_ino))
 		return -EM_EOVERFLOW;
@@ -3704,8 +3721,6 @@ static int32_t write_stat(char *base,
 
 #undef STSTTIM
 #undef CAST
-#undef OVERFLOWS
-#undef ISUNSIGNED
 
 	return 0;
 }
@@ -3866,6 +3881,204 @@ uint32_t wasmjit_emscripten____syscall212(uint32_t which, uint32_t varargs,
 		return -EM_EFAULT;
 
 	return check_ret(sys_chown(base + args.pathname, args.owner, args.group));
+}
+
+#define EM_DT_UNKNOWN 0
+#define EM_DT_FIFO 1
+#define EM_DT_CHR 2
+#define EM_DT_DIR 4
+#define EM_DT_BLK 6
+#define EM_DT_REG 8
+#define EM_DT_LNK 10
+#define EM_DT_SOCK 12
+
+em_unsigned_char convert_dtype(em_unsigned_char d_type)
+{
+#ifdef IS_LINUX
+	return d_type;
+#endif
+	switch (d_type) {
+	case EM_DT_FIFO: return DT_FIFO;
+	case EM_DT_CHR: return DT_CHR;
+	case EM_DT_DIR: return DT_DIR;
+	case EM_DT_BLK: return DT_BLK;
+	case EM_DT_REG: return DT_REG;
+	case EM_DT_LNK: return DT_LNK;
+	case EM_DT_SOCK: return DT_SOCK;
+	default: return DT_UNKNOWN;
+	}
+}
+
+/* getdents64 */
+uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	char *base;
+	int32_t ret;
+	long last_kdirent_off = 0;
+	char *dirbuf;
+	size_t dirbufsz;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  int32_t, fd,
+		  uint32_t, dirent,
+		  uint32_t, count);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.dirent, args.count))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+#define ALLOCATE_BUF (!(IS_LINUX && sizeof(struct em_linux_dirent64) <= sizeof(kernel_dirent64)))
+
+	if (ALLOCATE_BUF) {
+		struct stat st;
+		size_t pagemask;
+
+		/* TODO: cache fstat+buffer for this fd */
+
+		/* since it's possible we may not be able to copy anything back
+		   to child, we need to learn the current post */
+		last_kdirent_off = sys_lseek(args.fd, 0, SEEK_CUR);
+		if (last_kdirent_off < 0)
+			return check_ret(last_kdirent_off);
+
+		/* first get buffer size for file system */
+		ret = check_ret(sys_fstat(args.fd, &st));
+		if (ret < 0)
+			return ret;
+
+		pagemask = getpagesize();
+		pagemask -= 1;
+
+		/* then alloc appropriate buffer size */
+		dirbufsz = MMAX(args.count, st.st_blksize);
+		dirbufsz = (dirbufsz + pagemask) & ~pagemask;
+		dirbuf = malloc(dirbufsz);
+		if (!dirbuf)
+			return -EM_ENOMEM;
+	} else {
+		dirbuf = base + args.dirent;
+		dirbufsz = args.count;
+	}
+
+	ret = check_ret(sys_getdents64(args.fd, (void *) dirbuf, dirbufsz));
+	if (ret >= 0) {
+		/* if there was success, then we may need to do some conversion */
+		char *srcbuf = dirbuf;
+		char *dstbuf = base + args.dirent;
+		long amt_read = ret;
+
+		ret = 0;
+		while (srcbuf < dirbuf + amt_read) {
+			kernel_dirent64 kdirentv;
+			kernel_dirent64 *kdirent;
+			char *namebuf;
+			struct em_linux_dirent64 towrite;
+			unsigned short src_namelen;
+			unsigned short newdstsize;
+
+			if (ALLOCATE_BUF) {
+				/* this cast is okay, since the source is malloced */
+				kdirent = (void *) srcbuf;
+			} else {
+				memcpy(&kdirentv, srcbuf, offsetof(kernel_dirent64, d_name));
+				kdirent = &kdirentv;
+			}
+
+			namebuf = srcbuf + offsetof(kernel_dirent64, d_name);
+
+			src_namelen = kdirent->d_reclen -
+				offsetof(kernel_dirent64, d_name);
+			newdstsize =
+				offsetof(struct em_linux_dirent64, d_name) +
+				src_namelen;
+
+			/* if there is no more space to write dirents, break */
+			if (dstbuf + newdstsize > base + args.dirent + args.count) {
+				break;
+			}
+
+			last_kdirent_off = kdirent->d_off;
+			srcbuf += kdirent->d_reclen;
+
+			/* dont need to write if struct is exactly the same */
+			if (!(!ALLOCATE_BUF &&
+			      __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ &&
+			      sizeof(towrite) == sizeof(*kdirent) &&
+			      sizeof(towrite.d_ino) == sizeof(kdirent->d_ino) &&
+			      sizeof(towrite.d_off) == sizeof(kdirent->d_off) &&
+			      sizeof(towrite.d_reclen) == sizeof(kdirent->d_reclen) &&
+			      sizeof(towrite.d_type) == sizeof(kdirent->d_type) &&
+			      offsetof(struct em_linux_dirent64, d_ino) == offsetof(kernel_dirent64, d_ino) &&
+			      offsetof(struct em_linux_dirent64, d_off) == offsetof(kernel_dirent64, d_off) &&
+			      offsetof(struct em_linux_dirent64, d_reclen) == offsetof(kernel_dirent64, d_reclen) &&
+			      offsetof(struct em_linux_dirent64, d_type) == offsetof(kernel_dirent64, d_type))) {
+				if (OVERFLOWS(kdirent->d_ino) ||
+				    /* we have to remove this because emscripten goofed and made its
+				       d_off not unconditionally 64-bit, like getdents64 requires.
+				       in practice, this means telldir() in the user program will be totally broken
+				       TODO: fix this upstream
+				    */
+				    /* OVERFLOWS(kdirent->d_off) || */
+				    0) {
+					if (ALLOCATE_BUF)
+						free(dirbuf);
+					wasmjit_emscripten_internal_abort("overflow while filling dirent");
+				}
+				towrite.d_ino = uint32_t_swap_bytes(kdirent->d_ino);
+				towrite.d_off = int32_t_swap_bytes(kdirent->d_off);
+				towrite.d_reclen = uint16_t_swap_bytes(newdstsize);
+				towrite.d_type = convert_dtype(kdirent->d_type);
+
+#ifdef ALLOCATED_BUF
+#define COPYFN memcpy
+#else
+#define COPYFN memmove
+#endif
+
+				COPYFN(dstbuf, &towrite,
+				       offsetof(struct em_linux_dirent64, d_name));
+				COPYFN(dstbuf + offsetof(struct em_linux_dirent64, d_name),
+				       namebuf,
+				       src_namelen);
+
+#undef COPYFN
+			}
+
+			dstbuf += newdstsize;
+			ret += newdstsize;
+		}
+
+		/* if we read off some dir entries that we won't actually use
+		   then seek directory back */
+		if (srcbuf != dirbuf + amt_read) {
+			long rret;
+			/* NB: we only don't allocate a buf if know we make it smaller
+			   and if that's the case, we will surely consume every entry given
+			   to us */
+			assert(ALLOCATE_BUF);
+			/* NB: this avoids last_kdirent_off uninitialized warning */
+			if (!ALLOCATE_BUF) __builtin_unreachable();
+			assert(srcbuf < dirbuf + dirbufsz);
+			rret = sys_lseek(args.fd, last_kdirent_off, SEEK_SET);
+			if (rret < 0) {
+				if (ALLOCATE_BUF)
+					free(dirbuf);
+				wasmjit_emscripten_internal_abort("failed to backwards seek directory");
+			}
+		}
+	}
+
+	if (ALLOCATE_BUF) {
+		free(dirbuf);
+	}
+
+#undef ALLOCATE_BUF
+
+	return ret;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

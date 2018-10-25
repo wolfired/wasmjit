@@ -191,6 +191,8 @@ typedef struct __jmp_buf_tag {
 int setjmp(jmp_buf);
 void longjmp(jmp_buf, int) __attribute__((noreturn));
 
+#define getpagesize() PAGE_SIZE
+
 #ifdef __cplusplus
 }
 #endif
