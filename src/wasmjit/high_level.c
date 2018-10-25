@@ -356,9 +356,6 @@ int wasmjit_high_emscripten_invoke_main(struct WasmJITHigh *self,
 			malloc_inst = wasmjit_get_export(module_inst,
 							 "_malloc",
 							 IMPORT_DESC_TYPE_FUNC).func;
-			if (!malloc_inst)
-				return -1;
-
 
 			free_inst = wasmjit_get_export(module_inst,
 						       "_free",

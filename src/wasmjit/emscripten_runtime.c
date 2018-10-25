@@ -274,8 +274,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 			    struct FuncInst *free_inst,
 			    char *envp[])
 {
-	assert(malloc_inst);
-	{
+	if (malloc_inst) {
 		struct FuncType malloc_type;
 		wasmjit_valtype_t malloc_input_type = VALTYPE_I32;
 		wasmjit_valtype_t malloc_return_type = VALTYPE_I32;
@@ -795,6 +794,8 @@ static uint32_t getMemory(struct EmscriptenContext *ctx,
 {
 	union ValueUnion input, output;
 	input.i32 = amount;
+	if (!ctx->malloc_inst)
+		wasmjit_emscripten_internal_abort("No allocator");
 	if (wasmjit_invoke_function(ctx->malloc_inst, &input, &output))
 		wasmjit_emscripten_internal_abort("Failed to invoke allocator");
 	return output.i32;
