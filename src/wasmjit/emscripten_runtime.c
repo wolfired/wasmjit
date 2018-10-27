@@ -613,7 +613,7 @@ uint32_t wasmjit_emscripten____syscall140(uint32_t which, uint32_t varargs, stru
 	int64_t off;
 
 	LOAD_ARGS(funcinst, varargs, 5,
-		  int32_t, fd,
+		  uint32_t, fd,
 		  uint32_t, offset_high,
 		  uint32_t, offset_low,
 		  uint32_t, result,
@@ -637,6 +637,28 @@ uint32_t wasmjit_emscripten____syscall140(uint32_t which, uint32_t varargs, stru
 	    (off > OFF_MAX  ||
 	     off < OFF_MIN))
 		return -EM_EOVERFLOW;
+
+#if !IS_LINUX
+	{
+		struct EmscriptenContext *ctx;
+		int goodfd;
+		uint32_t fds;
+
+		ctx = _wasmjit_emscripten_get_context(funcinst);
+
+		fds = args.fd;
+		WASMJIT_CHECK_RANGE_SANITIZE(&goodfd, args.fd < ctx->fd_table.n_elts, &fds);
+		if (goodfd) {
+			struct EmFile *file = ctx->fd_table.elts[fds];
+			if (file) {
+				if (file->dirp) {
+					seekdir(file->dirp, off);
+					return 0;
+				}
+			}
+		}
+	}
+#endif
 
 	ret = check_ret(sys_lseek(args.fd, off, args.whence));
 
