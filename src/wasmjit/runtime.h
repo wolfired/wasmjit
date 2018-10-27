@@ -177,6 +177,12 @@ static const char *wasmjit_trap_reason_to_string(int reason) {
 	case WASMJIT_TRAP_STACK_OVERFLOW:
 		msg = "stack overflow";
 		break;
+	case WASMJIT_TRAP_INTEGER_OVERFLOW:
+		msg = "integer overflow";
+		break;
+	case WASMJIT_TRAP_ABORT:
+		msg = "internal abort";
+		break;
 	default:
 		assert(0);
 		__builtin_unreachable();
