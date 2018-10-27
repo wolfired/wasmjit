@@ -35,10 +35,8 @@ KWSC3(1, , recvmsg, int, user_msghdr_t *, unsigned int)
 KWSC3(1, , read, unsigned int, void *, size_t)
 KWSC3(1, , readv, unsigned long, const struct iovec *, unsigned long)
 KWSC2(1, , chmod, const char *, umode_t)
-KWSC5(1, _, preadv, unsigned long, const struct iovec *,
-      unsigned long, unsigned long, unsigned long)
-KWSC5(1, _, pwritev, unsigned long, const struct iovec *,
-      unsigned long, unsigned long, unsigned long)
+KWSC4(1, , pread64, unsigned int, char *, size_t, loff_t)
+KWSC4(1, , pwrite64, unsigned int, const char *, size_t, loff_t)
 KWSC2(1, , getrlimit, unsigned int, struct rlimit *)
 KWSC4(1, , prlimit64, pid_t, unsigned int, const struct rlimit64 *, struct rlimit64 *)
 KWSC2(1, , ftruncate, unsigned int, unsigned long);

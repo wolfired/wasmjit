@@ -3378,7 +3378,6 @@ uint32_t wasmjit_emscripten____syscall180(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
 	char *base;
-	struct iovec liov;
 
 	LOAD_ARGS(funcinst, varargs, 5,
 		  int32_t, fd,
@@ -3394,17 +3393,14 @@ uint32_t wasmjit_emscripten____syscall180(uint32_t which, uint32_t varargs,
 
 	/* NB: we don't use check_range_sanitize because
 	   we write to this memory location,
-	   but also because sys_preadv does its own spectre mitigation
+	   but also because sys_pread does its own spectre mitigation
 	*/
 	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, args.count))
 		return -EM_EFAULT;
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
-	liov.iov_base = base + args.buf;
-	liov.iov_len = args.count;
-
-	return check_ret(sys_preadv(args.fd, &liov, 1, args.offset));
+	return check_ret(sys_pread(args.fd, base + args.buf, args.count, args.offset));
 }
 
 /* pwrite64 */
@@ -3412,7 +3408,6 @@ uint32_t wasmjit_emscripten____syscall181(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
 	char *base;
-	struct iovec liov;
 
 	LOAD_ARGS(funcinst, varargs, 5,
 		  int32_t, fd,
@@ -3433,10 +3428,7 @@ uint32_t wasmjit_emscripten____syscall181(uint32_t which, uint32_t varargs,
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
-	liov.iov_base = base + args.buf;
-	liov.iov_len = args.count;
-
-	return check_ret(sys_pwritev(args.fd, &liov, 1, args.offset));
+	return check_ret(sys_pwrite(args.fd, base + args.buf, args.count, args.offset));
 }
 
 #define EM_RLIM_INFINITY  ~((uint64_t)0)

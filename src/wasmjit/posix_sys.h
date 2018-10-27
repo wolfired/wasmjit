@@ -127,11 +127,8 @@ typedef struct dirent kernel_dirent64;
 
 #include <wasmjit/posix_sys_linux_kernel_def.h>
 
-#define sys_preadv(fd, vec, vlen, pos)					\
-	_sys_preadv((fd), (vec), (vlen), (pos) & 0xffffffff, (pos) >> 32)
-
-#define sys_pwritev(fd, vec, vlen, pos)					\
-	_sys_pwritev((fd), (vec), (vlen), (pos) & 0xffffffff, (pos) >> 32)
+#define sys_pread sys_pread64
+#define sys_pwrite sys_pwrite64
 
 long sys_prlimit(pid_t pid, unsigned int resource,
 		 const struct rlimit *new_limit,
