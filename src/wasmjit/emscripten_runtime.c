@@ -326,6 +326,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->free_inst = free_inst;
 	ctx->environ = envp;
 	ctx->buildEnvironmentCalled = 0;
+	ctx->fd_table.n_elts = 0;
 
 	return 0;
 }
@@ -759,9 +760,33 @@ uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct
 {
 	/* TODO: need to define non-no filesystem case */
 	LOAD_ARGS(funcinst, varargs, 1,
-		  int32_t, fd);
+		  uint32_t, fd);
 
 	(void)which;
+
+#if !IS_LINUX
+	{
+		struct EmscriptenContext *ctx;
+		int goodfd;
+		uint32_t fds;
+
+		ctx = _wasmjit_emscripten_get_context(funcinst);
+
+		fds = args.fd;
+		WASMJIT_CHECK_RANGE_SANITIZE(&goodfd, args.fd < ctx->fd_table.n_elts, &fds);
+		if (goodfd) {
+			struct EmFile *file = ctx->fd_table.elts[fds];
+			if (file) {
+				if (file->dirp) {
+					closedir(file->dirp);
+				}
+				free(file);
+				ctx->fd_table.elts[fds] = NULL;
+			}
+		}
+	}
+#endif
+
 	return check_ret(sys_close(args.fd));
 }
 
@@ -4007,6 +4032,125 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 	}
 
 	return ret;
+}
+
+#else
+
+/* NB: this doesn't work in kernel context */
+
+uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	char *base;
+	struct EmscriptenContext *ctx;
+	struct EmFile *file;
+	int goodfd;
+	uint32_t fds;
+	char *dstbuf;
+	uint32_t res;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  uint32_t, fd,
+		  uint32_t, dirent,
+		  uint32_t, count);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.dirent, args.count))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	ctx = _wasmjit_emscripten_get_context(funcinst);
+
+	fds = args.fd;
+	WASMJIT_CHECK_RANGE_SANITIZE(&goodfd, args.fd < ctx->fd_table.n_elts, &fds);
+	if (!goodfd) {
+		size_t oldlen = ctx->fd_table.n_elts;
+
+		/* check that the descriptor is valid */
+		if (fcntl(args.fd, F_GETFD) < 0)
+			return check_ret(-errno);
+
+		if (!VECTOR_GROW(&ctx->fd_table, args.fd + 1))
+			return -EM_ENOMEM;
+
+		memset(&ctx->fd_table.elts[oldlen], 0, sizeof(file) * (args.fd + 1 - oldlen));
+
+		fds = args.fd;
+	}
+
+	file = ctx->fd_table.elts[fds];
+	if (!file) {
+		file = calloc(1, sizeof(*file));
+		if (!file)
+			return -EM_ENOMEM;
+		ctx->fd_table.elts[args.fd] = file;
+	}
+
+	if (!file->dirp) {
+		int fd2;
+		fd2 = dup(args.fd);
+		if (fd2 < 0)
+			return check_ret(-errno);
+		file->dirp = fdopendir(fd2);
+		if (!file->dirp) {
+			close(fd2);
+			return check_ret(-errno);
+		}
+	}
+
+	dstbuf = base + args.dirent;
+	res = 0;
+	while (1) {
+		struct em_linux_dirent64 towrite;
+		struct dirent *kdirent;
+		long curoff;
+		uint16_t newdstsz;
+		size_t namelen;
+
+		curoff = telldir(file->dirp);
+
+		kdirent = readdir(file->dirp);
+		if (!kdirent)
+			break;
+
+		namelen = strlen(kdirent->d_name);
+
+		if (offsetof(struct em_linux_dirent64, d_name) + namelen + 1 > 65535 ||
+		    /* we have to remove this because emscripten goofed and made its
+		       d_off not unconditionally 64-bit, like getdents64 requires.
+		       in practice, this means telldir() in the user program will be totally broken
+		       TODO: fix this upstream
+		    */
+		    /* OVERFLOWS(kdirent->d_ino) || */
+		    /* OVERFLOWS(curoff) || */
+		    0) {
+			wasmjit_emscripten_internal_abort("overflow while filling dirent");
+		}
+
+		newdstsz = offsetof(struct em_linux_dirent64, d_name) + namelen + 1;
+
+		if (res + newdstsz > args.count) {
+			/* we read one too many entries, seek backward */
+			seekdir(file->dirp, curoff);
+			break;
+		}
+
+		towrite.d_ino = uint32_t_swap_bytes(kdirent->d_ino);
+		towrite.d_off = int32_t_swap_bytes(curoff);
+		towrite.d_reclen = uint16_t_swap_bytes(newdstsz);
+		towrite.d_type = EM_DT_UNKNOWN;
+
+		memcpy(dstbuf, &towrite, offsetof(struct em_linux_dirent64, d_name));
+		memcpy(dstbuf + offsetof(struct em_linux_dirent64, d_name),
+		       kdirent->d_name, namelen + 1);
+
+		dstbuf += newdstsz;
+		res += newdstsz;
+	}
+
+	return res;
 }
 
 #endif

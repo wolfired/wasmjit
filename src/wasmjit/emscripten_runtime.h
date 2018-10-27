@@ -28,6 +28,8 @@
 #include <wasmjit/runtime.h>
 #include <wasmjit/util.h>
 #include <wasmjit/sys.h>
+#include <wasmjit/vector.h>
+#include <wasmjit/posix_sys.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,12 +39,17 @@ enum {
 	WASMJIT_EMSCRIPTEN_TOTAL_MEMORY = 16777216,
 };
 
+struct EmFile {
+	DIR *dirp;
+};
+
 struct EmscriptenContext {
 	struct FuncInst *errno_location_inst;
 	char **environ;
 	int buildEnvironmentCalled;
 	struct FuncInst *malloc_inst;
 	struct FuncInst *free_inst;
+	DEFINE_ANON_VECTOR(struct EmFile *) fd_table;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t
