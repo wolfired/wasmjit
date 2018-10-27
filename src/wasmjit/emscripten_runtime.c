@@ -4004,12 +4004,12 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 			      offsetof(struct em_linux_dirent64, d_off) == offsetof(struct linux_dirent64, d_off) &&
 			      offsetof(struct em_linux_dirent64, d_reclen) == offsetof(struct linux_dirent64, d_reclen) &&
 			      offsetof(struct em_linux_dirent64, d_type) == offsetof(struct linux_dirent64, d_type))) {
-				if (OVERFLOWS(kdirent->d_ino) ||
-				    /* we have to remove this because emscripten goofed and made its
+				if (/* we have to remove this because emscripten goofed and made its
 				       d_off not unconditionally 64-bit, like getdents64 requires.
 				       in practice, this means telldir() in the user program will be totally broken
 				       TODO: fix this upstream
 				    */
+				    /* OVERFLOWS(kdirent->d_ino) || */
 				    /* OVERFLOWS(kdirent->d_off) || */
 				    0) {
 					wasmjit_emscripten_internal_abort("overflow while filling dirent");
