@@ -43,5 +43,7 @@ KWSC2(1, , ftruncate, int, off_t);
 KWSC2(1, , stat, const char *, struct stat *);
 KWSC2(1, , lstat, const char *, struct stat *);
 KWSC2(1, , fstat, int, struct stat *);
+#ifdef __linux__
 KWSC3(1, , getdents64, int, void *, size_t)
+#endif
 KWSC3(1, , open, const char *, int, mode_t)

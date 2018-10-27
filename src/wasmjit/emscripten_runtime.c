@@ -3905,12 +3905,17 @@ em_unsigned_char convert_dtype(em_unsigned_char d_type)
 }
 
 /* getdents64 */
+
+#if IS_LINUX
+
+STATIC_ASSERT(sizeof(struct em_linux_dirent64) <= sizeof(struct linux_dirent64),
+	      em_linux_dirent64_too_large);
+
 uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
 	char *base;
 	int32_t ret;
-	long last_kdirent_off = 0;
 	char *dirbuf;
 	size_t dirbufsz;
 
@@ -3926,40 +3931,8 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
-#define ALLOCATE_BUF (!(IS_LINUX && sizeof(struct em_linux_dirent64) <= sizeof(kernel_dirent64)))
-
-	if (ALLOCATE_BUF) {
-		struct stat st;
-		size_t pagemask;
-
-		/* TODO: cache fstat+buffer for this fd */
-
-		/* since it's possible we may not be able to copy anything back
-		   to child, we need to learn the current post */
-		last_kdirent_off = sys_lseek(args.fd, 0, SEEK_CUR);
-		if (last_kdirent_off < 0)
-			return check_ret(last_kdirent_off);
-
-		/* first get buffer size for file system */
-		ret = check_ret(sys_fstat(args.fd, &st));
-		if (ret < 0)
-			return ret;
-
-		pagemask = getpagesize();
-		pagemask -= 1;
-
-		/* then alloc appropriate buffer size */
-		/* NB: POSIX says blksize_t shall be no larger than long */
-		assert(st.st_blksize >= 0);
-		dirbufsz = MMAX(args.count, (unsigned long) st.st_blksize);
-		dirbufsz = (dirbufsz + pagemask) & ~pagemask;
-		dirbuf = malloc(dirbufsz);
-		if (!dirbuf)
-			return -EM_ENOMEM;
-	} else {
-		dirbuf = base + args.dirent;
-		dirbufsz = args.count;
-	}
+	dirbuf = base + args.dirent;
+	dirbufsz = args.count;
 
 	ret = check_ret(sys_getdents64(args.fd, (void *) dirbuf, dirbufsz));
 	if (ret >= 0) {
@@ -3970,25 +3943,20 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 
 		ret = 0;
 		while (srcbuf < dirbuf + amt_read) {
-			kernel_dirent64 kdirentv;
-			kernel_dirent64 *kdirent;
+			struct linux_dirent64 kdirentv;
+			struct linux_dirent64 *kdirent;
 			char *namebuf;
 			struct em_linux_dirent64 towrite;
 			unsigned short src_namelen;
 			unsigned short newdstsize;
 
-			if (ALLOCATE_BUF) {
-				/* this cast is okay, since the source is malloced */
-				kdirent = (void *) srcbuf;
-			} else {
-				memcpy(&kdirentv, srcbuf, offsetof(kernel_dirent64, d_name));
-				kdirent = &kdirentv;
-			}
+			memcpy(&kdirentv, srcbuf, offsetof(struct linux_dirent64, d_name));
+			kdirent = &kdirentv;
 
-			namebuf = srcbuf + offsetof(kernel_dirent64, d_name);
+			namebuf = srcbuf + offsetof(struct linux_dirent64, d_name);
 
 			src_namelen = kdirent->d_reclen -
-				offsetof(kernel_dirent64, d_name);
+				offsetof(struct linux_dirent64, d_name);
 			newdstsize =
 				offsetof(struct em_linux_dirent64, d_name) +
 				src_namelen;
@@ -3998,21 +3966,19 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 				break;
 			}
 
-			last_kdirent_off = kdirent->d_off;
 			srcbuf += kdirent->d_reclen;
 
 			/* dont need to write if struct is exactly the same */
-			if (!(!ALLOCATE_BUF &&
-			      __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ &&
+			if (!(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ &&
 			      sizeof(towrite) == sizeof(*kdirent) &&
 			      sizeof(towrite.d_ino) == sizeof(kdirent->d_ino) &&
 			      sizeof(towrite.d_off) == sizeof(kdirent->d_off) &&
 			      sizeof(towrite.d_reclen) == sizeof(kdirent->d_reclen) &&
 			      sizeof(towrite.d_type) == sizeof(kdirent->d_type) &&
-			      offsetof(struct em_linux_dirent64, d_ino) == offsetof(kernel_dirent64, d_ino) &&
-			      offsetof(struct em_linux_dirent64, d_off) == offsetof(kernel_dirent64, d_off) &&
-			      offsetof(struct em_linux_dirent64, d_reclen) == offsetof(kernel_dirent64, d_reclen) &&
-			      offsetof(struct em_linux_dirent64, d_type) == offsetof(kernel_dirent64, d_type))) {
+			      offsetof(struct em_linux_dirent64, d_ino) == offsetof(struct linux_dirent64, d_ino) &&
+			      offsetof(struct em_linux_dirent64, d_off) == offsetof(struct linux_dirent64, d_off) &&
+			      offsetof(struct em_linux_dirent64, d_reclen) == offsetof(struct linux_dirent64, d_reclen) &&
+			      offsetof(struct em_linux_dirent64, d_type) == offsetof(struct linux_dirent64, d_type))) {
 				if (OVERFLOWS(kdirent->d_ino) ||
 				    /* we have to remove this because emscripten goofed and made its
 				       d_off not unconditionally 64-bit, like getdents64 requires.
@@ -4021,8 +3987,6 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 				    */
 				    /* OVERFLOWS(kdirent->d_off) || */
 				    0) {
-					if (ALLOCATE_BUF)
-						free(dirbuf);
 					wasmjit_emscripten_internal_abort("overflow while filling dirent");
 				}
 				towrite.d_ino = uint32_t_swap_bytes(kdirent->d_ino);
@@ -4030,53 +3994,22 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 				towrite.d_reclen = uint16_t_swap_bytes(newdstsize);
 				towrite.d_type = convert_dtype(kdirent->d_type);
 
-#ifdef ALLOCATED_BUF
-#define COPYFN memcpy
-#else
-#define COPYFN memmove
-#endif
-
-				COPYFN(dstbuf, &towrite,
+				memmove(dstbuf, &towrite,
 				       offsetof(struct em_linux_dirent64, d_name));
-				COPYFN(dstbuf + offsetof(struct em_linux_dirent64, d_name),
-				       namebuf,
-				       src_namelen);
-
-#undef COPYFN
+				memmove(dstbuf + offsetof(struct em_linux_dirent64, d_name),
+					namebuf,
+					src_namelen);
 			}
 
 			dstbuf += newdstsize;
 			ret += newdstsize;
 		}
-
-		/* if we read off some dir entries that we won't actually use
-		   then seek directory back */
-		if (srcbuf != dirbuf + amt_read) {
-			long rret;
-			/* NB: we only don't allocate a buf if know we make it smaller
-			   and if that's the case, we will surely consume every entry given
-			   to us */
-			assert(ALLOCATE_BUF);
-			/* NB: this avoids last_kdirent_off uninitialized warning */
-			if (!ALLOCATE_BUF) __builtin_unreachable();
-			assert(srcbuf < dirbuf + dirbufsz);
-			rret = sys_lseek(args.fd, last_kdirent_off, SEEK_SET);
-			if (rret < 0) {
-				if (ALLOCATE_BUF)
-					free(dirbuf);
-				wasmjit_emscripten_internal_abort("failed to backwards seek directory");
-			}
-		}
 	}
-
-	if (ALLOCATE_BUF) {
-		free(dirbuf);
-	}
-
-#undef ALLOCATE_BUF
 
 	return ret;
 }
+
+#endif
 
 #define EM_O_RDONLY 0
 #define EM_O_WRONLY 1

@@ -49,8 +49,6 @@ typedef unsigned int nfds_t;
 
 #define st_get_nsec(m, st) ((st)->st_ ## m ## time_nsec)
 
-typedef struct linux_dirent64 kernel_dirent64;
-
 #else
 
 #include <errno.h>
@@ -83,17 +81,13 @@ typedef struct msghdr user_msghdr_t;
 
 #if defined(__linux__)
 
-typedef struct {
+struct linux_dirent64 {
 	uint64_t d_ino;
 	int64_t d_off;
 	unsigned short d_reclen;
 	unsigned char d_type;
 	char d_name[1];
-} kernel_dirent64;
-
-#elif defined(__OpenBSD__)
-
-typedef struct dirent kernel_dirent64;
+};
 
 #endif
 
