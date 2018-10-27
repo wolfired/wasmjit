@@ -3651,9 +3651,12 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 #define ISUNSIGNED(a) ((a) >= 0 && ~(a) >= 0)
 #endif
 
-#define OVERFLOWS(a) (ISUNSIGNED(a)					\
-		      ? (a) > UINT32_MAX				\
-		      : ((a) < INT32_MIN || (a) > INT32_MAX))
+#define OVERFLOWS(a) (							\
+	sizeof(a) > 4 &&						\
+	(ISUNSIGNED(a)							\
+	 ? (a) > UINT32_MAX						\
+	 : ((a) < INT32_MIN || (a) > INT32_MAX))			\
+	 )
 
 static int32_t write_stat(char *base,
 			  uint32_t dest_addr,
