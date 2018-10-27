@@ -777,11 +777,19 @@ uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct
 		if (goodfd) {
 			struct EmFile *file = ctx->fd_table.elts[fds];
 			if (file) {
+				int closed = !!file->dirp;
+				int closedret;
 				if (file->dirp) {
-					closedir(file->dirp);
+					if (closedir(file->dirp) < 0) {
+						closedret = -errno;
+					} else {
+						closedret = 0;
+					}
 				}
 				free(file);
 				ctx->fd_table.elts[fds] = NULL;
+				if (closed)
+					return check_ret(closedret);
 			}
 		}
 	}
@@ -4089,13 +4097,8 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 	}
 
 	if (!file->dirp) {
-		int fd2;
-		fd2 = dup(args.fd);
-		if (fd2 < 0)
-			return check_ret(-errno);
-		file->dirp = fdopendir(fd2);
+		file->dirp = fdopendir(args.fd);
 		if (!file->dirp) {
-			close(fd2);
 			return check_ret(-errno);
 		}
 	}
