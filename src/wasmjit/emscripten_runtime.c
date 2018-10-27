@@ -610,11 +610,12 @@ uint32_t wasmjit_emscripten____syscall140(uint32_t which, uint32_t varargs, stru
 {
 	char *base;
 	int32_t ret;
+	int64_t off;
 
 	LOAD_ARGS(funcinst, varargs, 5,
 		  int32_t, fd,
 		  uint32_t, offset_high,
-		  int32_t, offset_low,
+		  uint32_t, offset_low,
 		  uint32_t, result,
 		  int32_t, whence);
 
@@ -625,11 +626,19 @@ uint32_t wasmjit_emscripten____syscall140(uint32_t which, uint32_t varargs, stru
 	if (!_wasmjit_emscripten_check_range(funcinst, args.result, 4))
 		return -EM_EFAULT;
 
-	// emscripten off_t is 32-bits, offset_high is useless
-	if (args.offset_high)
-		return -EM_EINVAL;
+	off = args.offset_low | (((uint64_t)args.offset_high) << 32);
 
-	ret = check_ret(sys_lseek(args.fd, args.offset_low, args.whence));
+#define OFF_MAX ((off_t)((((uintmax_t)1) << (sizeof(off_t) * 8 - 1)) - 1))
+#define OFF_MIN ((off_t)(((uintmax_t)1) << (sizeof(off_t) * 8 - 1)))
+
+	/* TODO: we should compile with _FILE_OFFSET_BITS == 64 on
+	   32-bit linux */
+	if (sizeof(off_t) < 8 &&
+	    (off > OFF_MAX  ||
+	     off < OFF_MIN))
+		return -EM_EOVERFLOW;
+
+	ret = check_ret(sys_lseek(args.fd, off, args.whence));
 
 	if (ret) {
 		return ret;
