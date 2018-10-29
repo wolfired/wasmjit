@@ -49,6 +49,9 @@ typedef unsigned int nfds_t;
 
 #define st_get_nsec(m, st) ((st)->st_ ## m ## time_nsec)
 
+struct not_real;
+typedef struct not_real DIR;
+
 #else
 
 #include <errno.h>
