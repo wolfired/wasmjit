@@ -129,6 +129,8 @@ static void *get_stack_top(void)
 	return NULL;
 }
 
+#define MISSING_GET_STACK_TOP
+
 #endif
 
 static int parse_module(const char *filename, struct Module *module)
@@ -390,9 +392,12 @@ static int run_emscripten_file(const char *filename,
 	uint32_t flags = 0;
 
 	stack_top = get_stack_top();
+
+#ifndef MISSING_GET_STACK_TOP
 	if (!stack_top) {
 		fprintf(stderr, "warning: running without a stack limit\n");
 	}
+#endif
 
 	wasmjit_set_stack_top(stack_top);
 
