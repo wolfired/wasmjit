@@ -35,6 +35,7 @@
 #include <linux/poll.h>
 #include <linux/stat.h>
 #include <linux/dirent.h>
+#include <linux/statfs.h>
 
 typedef int socklen_t;
 typedef struct user_msghdr user_msghdr_t;
@@ -52,6 +53,26 @@ typedef unsigned int nfds_t;
 struct not_real;
 typedef struct not_real DIR;
 
+typedef struct statfs64 user_statvfs;
+
+#define statvfs_get_type(pstvfs) ((pstvfs)->f_type)
+#define statvfs_get_low_fsid(pstvfs) ((pstvfs)->f_fsid.val[0])
+#define statvfs_get_high_fsid(pstvfs) ((pstvfs)->f_fsid.val[1])
+#define statvfs_get_flags(pstvfs) ((pstvfs)->f_flags)
+#define statvfs_get_namemax(pstvfs) ((pstvfs)->f_namelen)
+
+#ifndef ST_WRITE
+#define ST_WRITE 0x0080
+#endif
+
+#ifndef ST_APPEND
+#define ST_APPEND 0x100
+#endif
+
+#ifndef ST_IMMUTABLE
+#define ST_IMMUTABLE 0x100
+#endif
+
 #else
 
 #include <errno.h>
@@ -67,6 +88,7 @@ typedef struct not_real DIR;
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <sys/statvfs.h>
 
 #if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809
 #define st_get_nsec(m, st) ((st)->st_ ## m ## tim.tv_nsec)
@@ -93,6 +115,14 @@ struct linux_dirent64 {
 };
 
 #endif
+
+typedef struct statvfs user_statvfs;
+
+#define statvfs_get_type(pstvfs) 0
+#define statvfs_get_low_fsid(pstvfs) ((pstvfs)->f_fsid & 0xffffffff)
+#define statvfs_get_high_fsid(pstvfs) ((pstvfs)->f_fsid >> 32)
+#define statvfs_get_flags(pstvfs) ((pstvfs)->f_flag)
+#define statvfs_get_namemax(pstvfs) ((pstvfs)->f_namemax)
 
 #endif
 
@@ -130,6 +160,8 @@ struct linux_dirent64 {
 long sys_prlimit(pid_t pid, unsigned int resource,
 		 const struct rlimit *new_limit,
 		 struct rlimit *old_limit);
+
+#define sys_statvfs(path, buf) sys_statfs64((path), sizeof(*(buf)), (buf))
 
 #define sys_stat sys_newstat
 #define sys_lstat sys_newlstat

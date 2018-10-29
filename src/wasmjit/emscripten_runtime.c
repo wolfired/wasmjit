@@ -1743,6 +1743,9 @@ typedef uint32_t em_ino_t;
 typedef uint32_t em_time_t;
 typedef uint16_t em_unsigned_short;
 typedef uint8_t em_unsigned_char;
+typedef uint32_t em_unsigned_long;
+typedef uint32_t em_fsblkcnt_t;
+typedef uint32_t em_fsfilcnt_t;
 
 struct em_timespec {
 	em_time_t tv_sec;
@@ -1774,6 +1777,18 @@ struct em_linux_dirent64 {
 	em_unsigned_short d_reclen;
 	em_unsigned_char d_type;
 	char d_name[1];
+};
+
+typedef struct {
+	em_int __val[2];
+} em_fsid_t;
+
+struct em_statfs64 {
+	em_unsigned_long f_type, f_bsize;
+	em_fsblkcnt_t f_blocks, f_bfree, f_bavail;
+	em_fsfilcnt_t f_files, f_ffree;
+	em_fsid_t f_fsid;
+	em_unsigned_long f_namelen, f_frsize, f_flags, f_spare[4];
 };
 
 struct linux_ucred {
@@ -4338,6 +4353,168 @@ uint32_t wasmjit_emscripten____syscall5(uint32_t which, uint32_t varargs,
 		}
 	}
 
+	return ret;
+}
+
+#define EM_ST_RDONLY 1
+#define EM_ST_NOSUID 2
+#define EM_ST_NODEV  4
+#define EM_ST_NOEXEC 8
+#define EM_ST_SYNCHRONOUS 16
+#define EM_ST_MANDLOCK    64
+#define EM_ST_WRITE       128
+#define EM_ST_APPEND      256
+#define EM_ST_IMMUTABLE   512
+#define EM_ST_NOATIME     1024
+#define EM_ST_NODIRATIME  2048
+
+static int check_statvfs_flags(unsigned long flag)
+{
+	unsigned long all =
+		ST_RDONLY |
+		ST_NOSUID |
+#ifdef ST_NODEV
+		ST_NODEV |
+#endif
+#ifdef ST_NOEXEC
+		ST_NOEXEC |
+#endif
+#ifdef ST_SYNCHRONOUS
+		ST_SYNCHRONOUS |
+#endif
+#ifdef ST_MANDLOCK
+		ST_MANDLOCK |
+#endif
+#ifdef ST_WRITE
+		ST_WRITE |
+#endif
+#ifdef ST_APPEND
+		ST_APPEND |
+#endif
+#ifdef ST_IMMUTABLE
+		ST_IMMUTABLE |
+#endif
+#ifdef ST_NOATIME
+		ST_NOATIME |
+#endif
+#ifdef ST_NODIRATIME
+		ST_NODIRATIME |
+#endif
+		0;
+
+#if IS_LINUX
+	if (sizeof(flag) <= 4 || !(flag >> 32))
+		return 1;
+#endif
+
+	return !(~all & flag);
+}
+
+
+static uint32_t convert_statvfs_flags(unsigned long flag)
+{
+	uint32_t out = 0;
+
+#if IS_LINUX
+	if (sizeof(flag) <= 4 || !(flag >> 32))
+		return flag;
+#endif
+
+#define p(n) \
+	if (flag & EM_ST_ ## n)			\
+		out |= ST_ ## n
+
+	p(RDONLY);
+	p(NOSUID);
+
+#ifdef ST_NODEV
+	p(NODEV);
+#endif
+#ifdef ST_NOEXEC
+	p(NOEXEC);
+#endif
+#ifdef ST_SYNCHRONOUS
+	p(SYNCHRONOUS);
+#endif
+#ifdef ST_MANDLOCK
+	p(MANDLOCK);
+#endif
+#ifdef ST_WRITE
+	p(WRITE);
+#endif
+#ifdef ST_APPEND
+	p(APPEND);
+#endif
+#ifdef ST_IMMUTABLE
+	p(IMMUTABLE);
+#endif
+#ifdef ST_NOATIME
+	p(NOATIME);
+#endif
+#ifdef ST_NODIRATIME
+	p(NODIRATIME);
+#endif
+
+	return out;
+}
+
+/* statfs64 */
+uint32_t wasmjit_emscripten____syscall268(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	char *base;
+	user_statvfs stvfs;
+	int32_t ret;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  uint32_t, pathname,
+		  uint32_t, size,
+		  uint32_t, buf);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
+		return -EM_EFAULT;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, args.size))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	ret = check_ret(sys_statvfs(base + args.pathname, &stvfs));
+	if (ret >= 0) {
+		struct em_statfs64 out;
+
+		if (OVERFLOWS(stvfs.f_bsize) ||
+		    OVERFLOWS(stvfs.f_blocks) ||
+		    OVERFLOWS(stvfs.f_bfree) ||
+		    OVERFLOWS(stvfs.f_bavail) ||
+		    OVERFLOWS(stvfs.f_files) ||
+		    OVERFLOWS(stvfs.f_ffree) ||
+		    OVERFLOWS(statvfs_get_low_fsid(&stvfs)) ||
+		    OVERFLOWS(statvfs_get_high_fsid(&stvfs)) ||
+		    OVERFLOWS(statvfs_get_namemax(&stvfs)) ||
+		    OVERFLOWS(stvfs.f_frsize) ||
+		    !check_statvfs_flags(statvfs_get_flags(&stvfs)) ||
+		    0) {
+			return -EM_EOVERFLOW;
+		}
+
+		out.f_type = statvfs_get_type(&stvfs);
+		out.f_bsize = uint32_t_swap_bytes(stvfs.f_bsize);
+		out.f_blocks = uint32_t_swap_bytes(stvfs.f_blocks);
+		out.f_bfree = uint32_t_swap_bytes(stvfs.f_bfree);
+		out.f_bavail = uint32_t_swap_bytes(stvfs.f_bavail);
+		out.f_files = uint32_t_swap_bytes(stvfs.f_files);
+		out.f_ffree = uint32_t_swap_bytes(stvfs.f_ffree);
+		out.f_fsid.__val[0] = uint32_t_swap_bytes(statvfs_get_low_fsid(&stvfs));
+		out.f_fsid.__val[1] = uint32_t_swap_bytes(statvfs_get_high_fsid(&stvfs));
+		out.f_namelen = uint32_t_swap_bytes(statvfs_get_namemax(&stvfs));
+		out.f_frsize = uint32_t_swap_bytes(stvfs.f_frsize);
+		out.f_flags = uint32_t_swap_bytes(convert_statvfs_flags(statvfs_get_flags(&stvfs)));
+
+		memcpy(base + args.buf, &out, sizeof(out));
+	}
 	return ret;
 }
 
