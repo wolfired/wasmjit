@@ -67,6 +67,20 @@ int getdents64(unsigned int fd, struct linux_dirent64 *buf, unsigned int nbytes)
 
 #endif
 
+#ifdef NEED_POSIX_FADVISE
+
+int posix_fadvise(int fd, off_t offset, off_t len, int advice)
+{
+	(void) fd;
+	(void) offset;
+	(void) len;
+	(void) advice;
+	/* doing nothing is a valid implementation of posix_fadvise */
+	return 0;
+}
+
+#endif
+
 #define __KDECL(to,n,t) t _##n
 #define __KA(to,n,t) _##n
 

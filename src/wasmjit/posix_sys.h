@@ -125,6 +125,38 @@ typedef struct statvfs user_statvfs;
 #define statvfs_get_flags(pstvfs) ((pstvfs)->f_flag)
 #define statvfs_get_namemax(pstvfs) ((pstvfs)->f_namemax)
 
+/* OpenBSD doesn't implement posix_fadvise */
+#if !defined(EM_POSIX_FADV_NORMAL) && !defined(POSIX_FADV_RANDOM) && !defined(POSIX_FADV_SEQUENTIAL) && !defined(POSIX_FADV_WILLNEED) && !defined(POSIX_FADV_DONTNEED) && !defined(POSIX_FADV_NOREUSE)
+
+int posix_fadvise(int fd, off_t offset, off_t len, int advice);
+#define NEED_POSIX_FADVISE
+
+#endif
+
+#ifndef POSIX_FADV_NORMAL
+#define POSIX_FADV_NORMAL 0
+#endif
+
+#ifndef POSIX_FADV_RANDOM
+#define POSIX_FADV_RANDOM 0
+#endif
+
+#ifndef POSIX_FADV_SEQUENTIAL
+#define POSIX_FADV_SEQUENTIAL 0
+#endif
+
+#ifndef POSIX_FADV_WILLNEED
+#define POSIX_FADV_WILLNEED 0
+#endif
+
+#ifndef POSIX_FADV_DONTNEED
+#define POSIX_FADV_DONTNEED 0
+#endif
+
+#ifndef POSIX_FADV_NOREUSE
+#define POSIX_FADV_NOREUSE 0
+#endif
+
 #endif
 
 #include <wasmjit/util.h>
