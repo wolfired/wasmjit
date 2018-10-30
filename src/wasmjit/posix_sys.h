@@ -36,6 +36,7 @@
 #include <linux/stat.h>
 #include <linux/dirent.h>
 #include <linux/statfs.h>
+#include <linux/fadvise.h>
 
 typedef int socklen_t;
 typedef struct user_msghdr user_msghdr_t;
@@ -166,6 +167,7 @@ long sys_prlimit(pid_t pid, unsigned int resource,
 #define sys_stat sys_newstat
 #define sys_lstat sys_newlstat
 #define sys_fstat sys_newfstat
+#define sys_posix_fadvise sys_fadvise64_64
 
 #else
 

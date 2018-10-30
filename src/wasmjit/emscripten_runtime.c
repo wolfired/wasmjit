@@ -4520,6 +4520,80 @@ uint32_t wasmjit_emscripten____syscall268(uint32_t which, uint32_t varargs,
 	return ret;
 }
 
+#define EM_POSIX_FADV_NORMAL	0 /* No further special treatment.  */
+#define EM_POSIX_FADV_RANDOM	1 /* Expect random page references.  */
+#define EM_POSIX_FADV_SEQUENTIAL	2 /* Expect sequential page references.  */
+#define EM_POSIX_FADV_WILLNEED	3 /* Will need these pages.  */
+#define EM_POSIX_FADV_DONTNEED	4 /* Don't need these pages.  */
+#define EM_POSIX_FADV_NOREUSE	5 /* Data will be accessed once.  */
+
+int check_advice(uint32_t advice)
+{
+#if 0 && IS_LINUX && !defined(__s390x__)
+	(void)advice;
+	return 1;
+#else
+	uint32_t all =
+		EM_POSIX_FADV_NORMAL |
+		EM_POSIX_FADV_RANDOM |
+		EM_POSIX_FADV_SEQUENTIAL |
+		EM_POSIX_FADV_WILLNEED |
+		EM_POSIX_FADV_DONTNEED |
+		EM_POSIX_FADV_NOREUSE |
+		0;
+
+
+	return !(advice & ~all);
+#endif
+}
+
+int convert_advice(uint32_t advice)
+{
+#if 0 && IS_LINUX && !defined(__s390x__)
+	return advice;
+#else
+	int out = 0;
+
+#define p(n)					\
+	if (advice & EM_POSIX_FADV_ ## n)	\
+		out |= POSIX_FADV_ ## n
+
+	p(NORMAL);
+	p(RANDOM);
+	p(SEQUENTIAL);
+	p(WILLNEED);
+	p(DONTNEED);
+	p(NOREUSE);
+
+#undef p
+
+	return out;
+#endif
+}
+
+/* fadvise64_64 */
+uint32_t wasmjit_emscripten____syscall272(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	int advice;
+
+	LOAD_ARGS(funcinst, varargs, 4,
+		  uint32_t, fd,
+		  int32_t, offset,
+		  int32_t, len,
+		  uint32_t, advice);
+
+	(void)which;
+
+	if (!check_advice(args.advice)) {
+		return -EM_EINVAL;
+	}
+
+	advice = convert_advice(args.advice);
+
+	return check_ret(sys_posix_fadvise(args.fd, args.offset, args.len, advice));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */

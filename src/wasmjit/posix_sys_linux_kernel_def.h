@@ -46,3 +46,4 @@ KWSC2(1, , newfstat, unsigned int, struct stat *);
 KWSC3(1, , getdents64, unsigned int, struct linux_dirent64 *, unsigned int)
 KWSC3(1, , open, const char *, int, umode_t)
 KWSC3(1, , statfs64, const char *, size_t, struct statfs64 *)
+KWSC4(1, , fadvise64_64, int, loff_t, loff_t, int)
