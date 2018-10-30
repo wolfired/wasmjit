@@ -4455,6 +4455,8 @@ static uint32_t convert_statvfs_flags(unsigned long flag)
 	p(NODIRATIME);
 #endif
 
+#undef p
+
 	return out;
 }
 
