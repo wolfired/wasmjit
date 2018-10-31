@@ -205,6 +205,7 @@ typedef struct stat64 sys_stat_t;
 #define sys_stat sys_stat64
 #define sys_lstat sys_lstat64
 #define sys_fstat sys_fstat64
+#define sys_fstatat sys_fstatat64
 
 #else
 
@@ -213,6 +214,7 @@ typedef struct stat sys_stat_t;
 #define sys_stat sys_newstat
 #define sys_lstat sys_newlstat
 #define sys_fstat sys_newfstat
+#define sys_fstatat sys_newfstatat
 
 #endif
 

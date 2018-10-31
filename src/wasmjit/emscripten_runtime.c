@@ -4621,6 +4621,88 @@ uint32_t wasmjit_emscripten____syscall295(uint32_t which, uint32_t varargs,
 	return finish_openat(funcinst, args.dirfd, args.pathname, args.flags, args.mode);
 }
 
+#define EM_AT_EMPTY_PATH 0x1000
+#define EM_AT_NO_AUTOMOUNT 0x800
+#define EM_AT_SYMLINK_NOFOLLOW 0x400
+
+static int check_fstatat_flags(uint32_t flags)
+{
+	uint32_t all =
+#ifdef AT_EMPTY_PATH
+		EM_AT_EMPTY_PATH |
+#endif
+#ifdef AT_NO_AUTOMOUNT
+		EM_AT_NO_AUTOMOUNT |
+#endif
+		EM_AT_SYMLINK_NOFOLLOW |
+		0;
+
+	return ~(flags & ~all);
+}
+
+static int convert_fstatat_flags(uint32_t flags)
+{
+	int out = 0;
+
+#define p(n)					\
+	if (flags & EM_AT_ ## n)		\
+		out |= AT_ ## n
+
+#ifdef AT_EMPTY_PATH
+	p(EMPTY_PATH);
+#endif
+
+#ifdef AT_NO_AUTOMOUNT
+	p(NO_AUTOMOUNT);
+#endif
+
+	p(SYMLINK_NOFOLLOW);
+
+#undef p
+
+	return out;
+}
+
+/* fstatat64 */
+uint32_t wasmjit_emscripten____syscall300(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	sys_stat_t st;
+	char *base;
+	int sys_dirfd, sys_flags;
+	int32_t ret;
+
+	LOAD_ARGS(funcinst, varargs, 4,
+		  int32_t, dirfd,
+		  uint32_t, pathname,
+		  uint32_t, buf,
+		  uint32_t, flags);
+
+	(void) which;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
+		return -EM_EFAULT;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, sizeof(struct em_stat64)))
+		return -EM_EFAULT;
+
+	if (!check_fstatat_flags(args.flags))
+		return -EM_EINVAL;
+
+	sys_flags = convert_fstatat_flags(args.flags);
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	sys_dirfd = args.dirfd == EM_AT_FDCWD ? AT_FDCWD : args.dirfd;
+
+	ret = check_ret(sys_fstatat(sys_dirfd, base + args.pathname, &st, sys_flags));
+	if (ret >= 0) {
+		ret = write_stat(base, args.buf, &st);
+	}
+
+	return ret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */

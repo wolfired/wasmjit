@@ -44,10 +44,12 @@ KWSC2(1, , ftruncate, unsigned int, unsigned long);
 KWSC2(1, , stat64, const char *, struct stat64 *)
 KWSC2(1, , lstat64, const char *, struct stat64 *)
 KWSC2(1, , fstat64, unsigned long, struct stat64 *)
+KWSC4(1, , fstatat64, int, const char *, struct stat64 *, int)
 #else
 KWSC2(1, , newstat, const char *, struct stat *);
 KWSC2(1, , newlstat, const char *, struct stat *);
 KWSC2(1, , newfstat, unsigned int, struct stat *);
+KWSC4(1, , newfstatat, int, const char *, struct stat *, int)
 #endif
 KWSC3(1, , getdents64, unsigned int, struct linux_dirent64 *, unsigned int)
 KWSC4(1, , openat, int, const char *, int, umode_t)
