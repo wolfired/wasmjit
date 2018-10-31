@@ -4307,38 +4307,36 @@ static int convert_sys_flags(uint32_t flags)
 #endif
 }
 
-/* open */
-uint32_t wasmjit_emscripten____syscall5(uint32_t which, uint32_t varargs,
-					struct FuncInst *funcinst)
+#define EM_AT_FDCWD (-100)
+
+uint32_t finish_openat(struct FuncInst *funcinst,
+		       int32_t dirfd, uint32_t pathname,
+		       uint32_t flags, uint32_t mode)
 {
 	char *base;
-	mode_t mode;
-	int flags;
+	mode_t sys_mode;
+	int sys_flags;
+	int sys_dirfd;
 	int32_t ret;
 	uint32_t had_large_file;
 
-	LOAD_ARGS(funcinst, varargs, 3,
-		  uint32_t, pathname,
-		  uint32_t, flags,
-		  uint32_t, mode);
-
-	(void)which;
-
-	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
+	if (!_wasmjit_emscripten_check_string(funcinst, pathname, PATH_MAX))
 		return -EM_EFAULT;
 
-	had_large_file = args.flags & EM_O_LARGEFILE;
+	had_large_file = flags & EM_O_LARGEFILE;
 
-	if (!check_flags(args.flags))
+	if (!check_flags(flags))
 		return -EM_EINVAL;
 
-	flags = convert_sys_flags(args.flags);
+	sys_dirfd = dirfd == EM_AT_FDCWD ? AT_FDCWD : dirfd;
+
+	sys_flags = convert_sys_flags(flags);
 	/* POSIX requires specific mode values */
-	mode = args.mode;
+	sys_mode = mode;
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
-	ret = check_ret(sys_open(base + args.pathname, flags, mode));
+	ret = check_ret(sys_openat(sys_dirfd, base + pathname, sys_flags, sys_mode));
 	if (ret >= 0) {
 		if (!had_large_file && sizeof(off_t) != 32) {
 			struct stat st;
@@ -4354,6 +4352,20 @@ uint32_t wasmjit_emscripten____syscall5(uint32_t which, uint32_t varargs,
 	}
 
 	return ret;
+}
+
+/* open */
+uint32_t wasmjit_emscripten____syscall5(uint32_t which, uint32_t varargs,
+					struct FuncInst *funcinst)
+{
+	LOAD_ARGS(funcinst, varargs, 3,
+		  uint32_t, pathname,
+		  uint32_t, flags,
+		  uint32_t, mode);
+
+	(void)which;
+
+	return finish_openat(funcinst, EM_AT_FDCWD, args.pathname, args.flags, args.mode);
 }
 
 #define EM_ST_RDONLY 1
@@ -4592,6 +4604,21 @@ uint32_t wasmjit_emscripten____syscall272(uint32_t which, uint32_t varargs,
 	advice = convert_advice(args.advice);
 
 	return check_ret(sys_posix_fadvise(args.fd, args.offset, args.len, advice));
+}
+
+/* openat */
+uint32_t wasmjit_emscripten____syscall295(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	LOAD_ARGS(funcinst, varargs, 4,
+		  int32_t, dirfd,
+		  uint32_t, pathname,
+		  uint32_t, flags,
+		  uint32_t, mode);
+
+	(void) which;
+
+	return finish_openat(funcinst, args.dirfd, args.pathname, args.flags, args.mode);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

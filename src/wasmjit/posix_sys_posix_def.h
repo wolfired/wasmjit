@@ -46,6 +46,6 @@ KWSC2(1, , fstat, int, struct stat *);
 #ifdef __linux__
 KWSC3(1, , getdents64, int, void *, size_t)
 #endif
-KWSC3(1, , open, const char *, int, mode_t)
+KWSC4(1, , openat, int, const char *, int, mode_t)
 KWSC2(1, , statvfs, const char *, struct statvfs *)
 KWSC4(1, , posix_fadvise, int, off_t, off_t, int)
