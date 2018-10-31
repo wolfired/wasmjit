@@ -40,9 +40,15 @@ KWSC4(1, , pwrite64, unsigned int, const char *, size_t, loff_t)
 KWSC2(1, , getrlimit, unsigned int, struct rlimit *)
 KWSC4(1, , prlimit64, pid_t, unsigned int, const struct rlimit64 *, struct rlimit64 *)
 KWSC2(1, , ftruncate, unsigned int, unsigned long);
+#if defined(__ARCH_WANT_STAT64)
+KWSC2(1, , stat64, const char *, struct stat64 *)
+KWSC2(1, , lstat64, const char *, struct stat64 *)
+KWSC2(1, , fstat64, unsigned long, struct stat64 *)
+#else
 KWSC2(1, , newstat, const char *, struct stat *);
 KWSC2(1, , newlstat, const char *, struct stat *);
 KWSC2(1, , newfstat, unsigned int, struct stat *);
+#endif
 KWSC3(1, , getdents64, unsigned int, struct linux_dirent64 *, unsigned int)
 KWSC4(1, , openat, int, const char *, int, umode_t)
 KWSC3(1, , statfs64, const char *, size_t, struct statfs64 *)

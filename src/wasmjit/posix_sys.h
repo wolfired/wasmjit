@@ -196,12 +196,29 @@ long sys_prlimit(pid_t pid, unsigned int resource,
 
 #define sys_statvfs(path, buf) sys_statfs64((path), sizeof(*(buf)), (buf))
 
+#define sys_posix_fadvise sys_fadvise64_64
+
+#if defined(__ARCH_WANT_STAT64)
+
+typedef struct stat64 sys_stat_t;
+
+#define sys_stat sys_stat64
+#define sys_lstat sys_lstat64
+#define sys_fstat sys_fstat64
+
+#else
+
+typedef struct stat sys_stat_t;
+
 #define sys_stat sys_newstat
 #define sys_lstat sys_newlstat
 #define sys_fstat sys_newfstat
-#define sys_posix_fadvise sys_fadvise64_64
+
+#endif
 
 #else
+
+typedef struct stat sys_stat_t;
 
 #define KWSCx(_n, err, _pre, _name, ...) long _pre ## sys_ ## _name(__KMAP(_n, __KDECL, __VA_ARGS__));
 

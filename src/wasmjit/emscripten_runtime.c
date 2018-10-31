@@ -3739,7 +3739,7 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 
 static int32_t write_stat(char *base,
 			  uint32_t dest_addr,
-			  struct stat *st)
+			  sys_stat_t *st)
 {
 	uint32_t scratch;
 	char *base2 = base + dest_addr;
@@ -3804,7 +3804,7 @@ uint32_t wasmjit_emscripten____syscall195(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
 	int32_t ret;
-	struct stat st;
+	sys_stat_t st;
 	char *base;
 
 	LOAD_ARGS(funcinst, varargs, 2,
@@ -3834,7 +3834,7 @@ uint32_t wasmjit_emscripten____syscall196(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
 	int32_t ret;
-	struct stat st;
+	sys_stat_t st;
 	char *base;
 
 	LOAD_ARGS(funcinst, varargs, 2,
@@ -3864,7 +3864,7 @@ uint32_t wasmjit_emscripten____syscall197(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
 	int32_t ret;
-	struct stat st;
+	sys_stat_t st;
 	char *base;
 
 	LOAD_ARGS(funcinst, varargs, 2,
@@ -4339,7 +4339,7 @@ uint32_t finish_openat(struct FuncInst *funcinst,
 	ret = check_ret(sys_openat(sys_dirfd, base + pathname, sys_flags, sys_mode));
 	if (ret >= 0) {
 		if (!had_large_file && sizeof(off_t) != 32) {
-			struct stat st;
+			sys_stat_t st;
 			long rret;
 			rret = sys_fstat(ret, &st);
 			if (rret < 0)
