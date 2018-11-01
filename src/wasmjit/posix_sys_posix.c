@@ -81,6 +81,35 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 
 #endif
 
+#if defined(__APPLE__)
+
+ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt,
+		off_t offset)
+{
+	ssize_t toret = 0;
+	int i;
+	for (i = 0; i < iovcnt; ++i) {
+		size_t written = 0;
+		while (written < iov[i].iov_len) {
+			ssize_t ltoret;
+			ltoret = pwrite(fd,
+					iov[i].iov_base + written, iov[i].iov_len - written,
+					offset);
+			if (ltoret < 0) {
+				if (toret)
+					return toret;
+				return ltoret;
+			}
+			written += ltoret;
+			offset += ltoret;
+			toret += ltoret;
+		}
+	}
+	return toret;
+}
+
+#endif
+
 #define __KDECL(to,n,t) t _##n
 #define __KA(to,n,t) _##n
 

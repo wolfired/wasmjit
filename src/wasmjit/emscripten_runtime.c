@@ -4707,6 +4707,30 @@ uint32_t wasmjit_emscripten____syscall300(uint32_t which, uint32_t varargs,
 	return ret;
 }
 
+/* pwritev */
+uint32_t wasmjit_emscripten____syscall334(uint32_t which, uint32_t varargs,
+					  struct FuncInst *funcinst)
+{
+	int32_t ret;
+	struct iovec *liov;
+
+	LOAD_ARGS(funcinst, varargs, 4,
+		  uint32_t, fd,
+		  uint32_t, iov,
+		  uint32_t, iovcnt,
+		  uint32_t, offset);
+
+	(void)which;
+
+	ret = check_ret(copy_iov(funcinst, args.iov, args.iovcnt, &liov));
+	if (ret < 0) {
+		ret = check_ret(sys_pwritev(args.fd, liov, args.iovcnt, args.offset));
+		free(liov);
+	}
+
+	return ret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */

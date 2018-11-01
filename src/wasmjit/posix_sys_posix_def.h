@@ -50,3 +50,4 @@ KWSC4(1, , openat, int, const char *, int, mode_t)
 KWSC2(1, , statvfs, const char *, struct statvfs *)
 KWSC4(1, , posix_fadvise, int, off_t, off_t, int)
 KWSC4(1, , fstatat, int, const char *, struct stat *, int);
+KWSC4(1, , pwritev, int, const struct iovec *, int, off_t)

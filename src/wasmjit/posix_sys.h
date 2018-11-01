@@ -197,6 +197,7 @@ long sys_prlimit(pid_t pid, unsigned int resource,
 #define sys_statvfs(path, buf) sys_statfs64((path), sizeof(*(buf)), (buf))
 
 #define sys_posix_fadvise sys_fadvise64_64
+#define sys_pwritev(fd, vec, vlen, pos) _sys_pwritev((fd), (vec), (vlen), ((unsigned long) (pos)) & 0xffffffff, (((unsigned long)(pos)) >> 32) & 0xffffffff)
 
 #if defined(__ARCH_WANT_STAT64)
 
