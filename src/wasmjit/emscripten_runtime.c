@@ -628,8 +628,12 @@ uint32_t wasmjit_emscripten____syscall140(uint32_t which, uint32_t varargs, stru
 
 	off = args.offset_low | (((uint64_t)args.offset_high) << 32);
 
+#ifndef OFF_MAX
 #define OFF_MAX ((off_t)((((uintmax_t)1) << (sizeof(off_t) * 8 - 1)) - 1))
+#endif
+#ifndef OFF_MIN
 #define OFF_MIN ((off_t)(((uintmax_t)1) << (sizeof(off_t) * 8 - 1)))
+#endif
 
 	/* TODO: we should compile with _FILE_OFFSET_BITS == 64 on
 	   32-bit linux */
