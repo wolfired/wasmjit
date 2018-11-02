@@ -4861,6 +4861,18 @@ uint32_t wasmjit_emscripten____syscall85(uint32_t which, uint32_t varargs,
 	return check_ret(sys_readlink(base + args.pathname, base + args.buf, args.bufsize));
 }
 
+/* munmap */
+uint32_t wasmjit_emscripten____syscall91(uint32_t which, uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	(void)which;
+	(void)varargs;
+	(void)funcinst;
+	/* we don't currently support munmap for the same reason we don't currently support
+	   mmap2 */
+	return -EM_ENOSYS;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
