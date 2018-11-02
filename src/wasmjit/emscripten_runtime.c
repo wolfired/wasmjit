@@ -4838,6 +4838,29 @@ uint32_t wasmjit_emscripten____syscall75(uint32_t which, uint32_t varargs,
 	return check_ret(sys_setrlimit(sys_resource, &lrlim));
 }
 
+/* readlink */
+uint32_t wasmjit_emscripten____syscall85(uint32_t which, uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	char *base;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  uint32_t, pathname,
+		  uint32_t, buf,
+		  uint32_t, bufsize);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, args.pathname, PATH_MAX))
+		return -EM_EFAULT;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, args.bufsize))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	return check_ret(sys_readlink(base + args.pathname, base + args.buf, args.bufsize));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
