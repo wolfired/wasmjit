@@ -4772,6 +4772,18 @@ uint32_t wasmjit_emscripten____syscall39(uint32_t which, uint32_t varargs,
 	return check_ret(sys_mkdir(base + args.pathname, args.mode));
 }
 
+/* umask */
+uint32_t wasmjit_emscripten____syscall60(uint32_t which, uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	LOAD_ARGS(funcinst, varargs, 1,
+		  uint32_t, mask);
+
+	(void)which;
+
+	return check_ret_signed(sys_umask(args.mask), 0);
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
