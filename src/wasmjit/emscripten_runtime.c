@@ -4873,6 +4873,37 @@ uint32_t wasmjit_emscripten____syscall91(uint32_t which, uint32_t varargs,
 	return -EM_ENOSYS;
 }
 
+#define EM_PRIO_PROCESS 0
+#define EM_PRIO_PGRP 1
+#define EM_PRIO_USER 2
+
+/* setpriority */
+uint32_t wasmjit_emscripten____syscall97(uint32_t which, uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	int sys_which;
+
+	LOAD_ARGS(funcinst, varargs, 3,
+		  int32_t, which,
+		  int32_t, who,
+		  int32_t, niceval);
+
+	(void)which;
+
+#if IS_LINUX
+	sys_which = args.niceval;
+#else
+	switch (args.who) {
+	case EM_PRIO_PROCESS: sys_which = PRIO_PROCESS; break;
+	case EM_PRIO_PGRP: sys_which = PRIO_PGRP; break;
+	case EM_PRIO_USER: sys_which = PRIO_USER; break;
+	default: return -EM_EINVAL;
+	}
+#endif
+
+	return check_ret(sys_setpriority(sys_which, args.who, args.niceval));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
