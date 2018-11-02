@@ -4807,6 +4807,16 @@ uint32_t wasmjit_emscripten____syscall64(uint32_t which, uint32_t varargs,
 	return check_ret_signed(sys_getppid(), 0);
 }
 
+/* setsid */
+uint32_t wasmjit_emscripten____syscall66(uint32_t which, uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	(void)which;
+	(void)varargs;
+	(void)funcinst;
+	return check_ret(sys_setsid());
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
