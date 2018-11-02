@@ -4784,6 +4784,19 @@ uint32_t wasmjit_emscripten____syscall60(uint32_t which, uint32_t varargs,
 	return check_ret_signed(sys_umask(args.mask), 0);
 }
 
+/* dup2 */
+uint32_t wasmjit_emscripten____syscall63(uint32_t which, uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	LOAD_ARGS(funcinst, varargs, 2,
+		  uint32_t, oldfd,
+		  uint32_t, newfd);
+
+	(void)which;
+
+	return check_ret(sys_dup2(args.oldfd, args.newfd));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
