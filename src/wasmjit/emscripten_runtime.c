@@ -4731,6 +4731,28 @@ uint32_t wasmjit_emscripten____syscall334(uint32_t which, uint32_t varargs,
 	return ret;
 }
 
+/* rename */
+uint32_t wasmjit_emscripten____syscall38(uint32_t which, uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	char *base;
+
+	LOAD_ARGS(funcinst, varargs, 2,
+		  uint32_t, old_path,
+		  uint32_t, new_path);
+
+	(void)which;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, args.old_path, PATH_MAX))
+		return -EM_EFAULT;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, args.new_path, PATH_MAX))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	return check_ret(sys_rename(base + args.old_path, base + args.new_path));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
