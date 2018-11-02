@@ -59,3 +59,4 @@ KWSC5(1, _, pwritev, unsigned long, const struct iovec *, unsigned long, unsigne
 KWSC2(1, , mkdir, const char *, umode_t)
 KWSC1(1, , umask, int)
 KWSC2(1, , dup2, unsigned int, unsigned int)
+KWSC2(1, , setrlimit, unsigned int, const struct rlimit *)

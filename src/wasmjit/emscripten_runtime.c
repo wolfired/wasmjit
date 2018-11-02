@@ -4817,6 +4817,27 @@ uint32_t wasmjit_emscripten____syscall66(uint32_t which, uint32_t varargs,
 	return check_ret(sys_setsid());
 }
 
+/* setrlimit */
+uint32_t wasmjit_emscripten____syscall75(uint32_t which, uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	struct rlimit lrlim;
+	int sys_resource;
+
+	LOAD_ARGS(funcinst, varargs, 2,
+		  int32_t, resource,
+		  uint32_t, rlim);
+
+	(void)which;
+
+	if (read_rlimit(funcinst, &lrlim, args.rlim) < 0)
+		return -EM_EFAULT;
+
+	sys_resource = convert_resource(args.resource);
+
+	return check_ret(sys_setrlimit(sys_resource, &lrlim));
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
