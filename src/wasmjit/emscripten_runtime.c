@@ -4904,6 +4904,13 @@ uint32_t wasmjit_emscripten____syscall97(uint32_t which, uint32_t varargs,
 	return check_ret(sys_setpriority(sys_which, args.who, args.niceval));
 }
 
+__attribute__((noreturn))
+void wasmjit_emscripten__abort(struct FuncInst *funcinst)
+{
+	(void) funcinst;
+	wasmjit_emscripten_internal_abort("_abort()");
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
