@@ -5051,6 +5051,86 @@ uint32_t wasmjit_emscripten__execve(uint32_t pathname,
 #endif
 }
 
+#define EM_CLOCK_REALTIME           0
+#define EM_CLOCK_MONOTONIC          1
+#define EM_CLOCK_PROCESS_CPUTIME_ID 2
+#define EM_CLOCK_THREAD_CPUTIME_ID  3
+#define EM_CLOCK_MONOTONIC_RAW      4
+#define EM_CLOCK_REALTIME_COARSE    5
+#define EM_CLOCK_MONOTONIC_COARSE   6
+#define EM_CLOCK_BOOTTIME           7
+#define EM_CLOCK_REALTIME_ALARM     8
+#define EM_CLOCK_BOOTTIME_ALARM     9
+#define EM_CLOCK_SGI_CYCLE         10
+#define EM_CLOCK_TAI               11
+
+uint32_t wasmjit_emscripten__clock_gettime(uint32_t clk_id, uint32_t tp,
+					   struct FuncInst *funcinst)
+{
+	struct em_timespec emtspec;
+	struct timespec tspec;
+	int32_t ret;
+	clockid_t sys_clk_id;
+
+	switch (clk_id) {
+#define p(n) case EM_CLOCK_ ## n: sys_clk_id = CLOCK_ ##n; break
+		p(REALTIME);
+		p(MONOTONIC);
+#ifdef CLOCK_PROCESS_CPUTIME_ID
+		p(PROCESS_CPUTIME_ID);
+#endif
+#ifdef CLOCK_THREAD_CPUTIME_ID
+		p(THREAD_CPUTIME_ID);
+#endif
+#ifdef CLOCK_MONOTONIC_RAW
+		p(MONOTONIC_RAW);
+#endif
+#ifdef CLOCK_REALTIME_COARSE
+		p(REALTIME_COARSE);
+#endif
+#ifdef CLOCK_BOOTTIME
+		p(BOOTTIME);
+#endif
+#ifdef CLOCK_REALTIME_ALARM
+		p(REALTIME_ALARM);
+#endif
+#ifdef CLOCK_BOOTTIME_ALARM
+		p(BOOTTIME_ALARM);
+#endif
+#ifdef CLOCK_SGI_CYCLE
+		p(SGI_CYCLE);
+#endif
+#ifdef CLOCK_TAI
+		p(TAI);
+#endif
+#undef p
+	default: ret = -EINVAL; goto err;
+	}
+
+	ret = sys_clock_gettime(sys_clk_id, &tspec);
+	if (ret >= 0) {
+		if (OVERFLOWS(tspec.tv_sec) ||
+		    OVERFLOWS(tspec.tv_nsec)) {
+			ret = -EOVERFLOW;
+			goto err;
+		}
+
+		emtspec.tv_sec = uint32_t_swap_bytes(tspec.tv_sec);
+		emtspec.tv_nsec = uint32_t_swap_bytes(tspec.tv_nsec);
+
+		if (_wasmjit_emscripten_copy_to_user(funcinst, tp, &emtspec, sizeof(struct em_timespec))) {
+			ret = -EFAULT;
+			goto err;
+		}
+
+		return ret;
+	} else {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(-ret), funcinst);
+		return (int32_t) -1;
+	}
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
