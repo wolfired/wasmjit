@@ -332,6 +332,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->environ = envp;
 	ctx->buildEnvironmentCalled = 0;
 	ctx->fd_table.n_elts = 0;
+	ctx->grp_file = NULL;
 
 	return 0;
 }
@@ -4914,6 +4915,27 @@ void wasmjit_emscripten__abort(struct FuncInst *funcinst)
 {
 	(void) funcinst;
 	wasmjit_emscripten_internal_abort("_abort()");
+}
+
+int32_t em_fclose(struct EmFILE *stream)
+{
+	(void) stream;
+	return 0;
+}
+
+void wasmjit_emscripten__endgrent(struct FuncInst *funcinst)
+{
+#ifdef __KERNEL__
+	/* NB: Kernel doesn't have endgrent, it's a higher level thing
+	   so we have to re-implement it in kernel space. In the future
+	   we have to move this functionality into the module */
+	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
+	if (ctx->grp_file) em_fclose(ctx->grp_file);
+	ctx->grp_file = NULL;
+#else
+	(void) funcinst;
+	endgrent();
+#endif
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

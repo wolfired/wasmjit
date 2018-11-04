@@ -39,6 +39,9 @@ enum {
 	WASMJIT_EMSCRIPTEN_TOTAL_MEMORY = 16777216,
 };
 
+struct EmFILE {
+};
+
 struct EmFile {
 	DIR *dirp;
 };
@@ -50,6 +53,8 @@ struct EmscriptenContext {
 	struct FuncInst *malloc_inst;
 	struct FuncInst *free_inst;
 	DEFINE_ANON_VECTOR(struct EmFile *) fd_table;
+	/* NB: only used in kernel */
+	struct EmFILE *grp_file;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t
