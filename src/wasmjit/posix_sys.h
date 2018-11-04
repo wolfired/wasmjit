@@ -37,6 +37,7 @@
 #include <linux/dirent.h>
 #include <linux/statfs.h>
 #include <linux/fadvise.h>
+#include <linux/binfmts.h>
 
 typedef int socklen_t;
 typedef struct user_msghdr user_msghdr_t;
@@ -114,6 +115,9 @@ struct linux_dirent64 {
 	unsigned char d_type;
 	char d_name[1];
 };
+
+/* use something reasonable */
+#define MAX_ARG_STRLEN (4096 * 32)
 
 #endif
 

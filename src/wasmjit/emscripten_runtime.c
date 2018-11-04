@@ -101,6 +101,28 @@ enum {
 #endif
 #endif
 
+__attribute__((unused))
+static int32_t convert_errno(long errno_)
+{
+	static int32_t to_sys_errno[] = {
+#define ERRNO(name, value) [name] = -value,
+#include <wasmjit/emscripten_runtime_sys_errno_def.h>
+#undef ERRNO
+	};
+
+	int32_t toret;
+
+	if ((size_t) errno_ >= sizeof(to_sys_errno) / sizeof(to_sys_errno[0])) {
+		toret = -EM_EINVAL;
+	} else {
+		toret = to_sys_errno[errno_];
+		if (!toret)
+			toret = -EM_EINVAL;
+	}
+
+	return toret;
+}
+
 /* error codes are the same for these targets */
 /* issigned == 0 implies no error */
 #if (defined(__KERNEL__) || defined(__linux__)) && defined(__x86_64__)
@@ -129,14 +151,6 @@ static int32_t check_ret_signed(long errno_, int issigned)
 
 static int32_t check_ret_signed(long errno_, int issigned)
 {
-	static int32_t to_sys_errno[] = {
-#define ERRNO(name, value) [name] = -value,
-#include <wasmjit/emscripten_runtime_sys_errno_def.h>
-#undef ERRNO
-	};
-
-	int32_t toret;
-
 	if (!issigned) {
 #if __LONG_WIDTH__ > 32
 		if ((unsigned long) errno_ > UINT32_MAX)
@@ -158,15 +172,7 @@ static int32_t check_ret_signed(long errno_, int issigned)
 
 	errno_ = -errno_;
 
-	if ((size_t) errno_ >= sizeof(to_sys_errno) / sizeof(to_sys_errno[0])) {
-		toret = -EM_EINVAL;
-	} else {
-		toret = to_sys_errno[errno_];
-		if (!toret)
-			toret = -EM_EINVAL;
-	}
-
-	return toret;
+	return convert_errno(errno_);
 }
 
 #endif
@@ -4935,6 +4941,113 @@ void wasmjit_emscripten__endgrent(struct FuncInst *funcinst)
 #else
 	(void) funcinst;
 	endgrent();
+#endif
+}
+
+__attribute__ ((unused))
+static int copy_string_array(struct FuncInst *funcinst,
+			     uint32_t string_array,
+			     char ***largvp)
+{
+	int ret;
+	char **largv = NULL, *base;
+	uint32_t local_argv;
+	size_t i = 0, n_args;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	local_argv = string_array;
+	for (i = 0; 1; ++i) {
+		uint32_t argp;
+		if (_wasmjit_emscripten_copy_from_user(funcinst, &argp, local_argv, sizeof(argp))) {
+			ret = EFAULT;
+			goto error;
+		}
+		if (!argp) break;
+		/* sizeof(char *) in emscripten space */
+		local_argv += 4;
+	}
+
+	n_args = i;
+
+	largv = wasmjit_alloc_vector(n_args + 1, sizeof(char *), NULL);
+	if (!largv) {
+		ret = ENOMEM;
+		goto error;
+	}
+
+	local_argv = string_array;
+	for (i = 0; 1; ++i) {
+		uint32_t argp;
+		if (_wasmjit_emscripten_copy_from_user(funcinst, &argp, local_argv, sizeof(argp))) {
+			ret = EFAULT;
+			goto error;
+		}
+		if (!argp) break;
+
+		argp = uint32_t_swap_bytes(argp);
+
+		if (!_wasmjit_emscripten_check_string(funcinst, argp, MAX_ARG_STRLEN)) {
+			ret = EFAULT;
+			goto error;
+		}
+
+		largv[i] = base + argp;
+		/* sizeof(char *) in emscripten space */
+		local_argv += 4;
+	}
+
+	largv[n_args] = NULL;
+
+	*largvp = largv;
+	ret = 0;
+
+	if (0) {
+	error:
+		free(largv);
+	}
+
+	return ret;
+}
+
+uint32_t wasmjit_emscripten__execve(uint32_t pathname,
+				    uint32_t argv,
+				    uint32_t envp,
+				    struct FuncInst *funcinst)
+{
+#ifdef __KERNEL__
+	/* TODO: implement for kernel */
+	wasmjit_emscripten____setErrNo(EM_ENOEXEC, funcinst);
+	return -1;
+#else
+	char **largv = NULL, **lenvp = NULL, *base;
+	int32_t ret;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, pathname, PATH_MAX)) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	if ((errno = copy_string_array(funcinst, argv, &largv))) {
+		goto err;
+	}
+
+	if ((errno = copy_string_array(funcinst, envp, &lenvp))) {
+		goto err;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	ret = execve(base + pathname, largv, lenvp);
+	if (ret < 0) {
+ err:
+		assert(errno >= 0);
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	}
+
+	free(largv);
+	free(lenvp);
+
+	return ret;
 #endif
 }
 
