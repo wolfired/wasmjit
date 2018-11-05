@@ -67,6 +67,7 @@ struct EmscriptenContext {
 #define COMMA_1 ,
 #define COMMA_2 ,
 #define COMMA_3 ,
+#define COMMA_4 ,
 #define COMMA_IF_NOT_EMPTY(_n) CAT(COMMA_, _n)
 
 #define DEFINE_WASM_FUNCTION(_name, _fptr, _output, _n, ...)		\

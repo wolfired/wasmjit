@@ -29,6 +29,13 @@
 
 #include <wasmjit/emscripten_runtime.h>
 
+#ifndef __KERNEL__
+/* for system's getaddrinfo */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#endif
+
 #include <wasmjit/posix_sys.h>
 #include <wasmjit/util.h>
 #include <wasmjit/runtime.h>
@@ -1017,6 +1024,11 @@ static int convert_socket_type_to_local(int32_t type)
 	return type;
 }
 
+static int32_t convert_socket_type_to_em(int type)
+{
+	return type;
+}
+
 #else
 
 static int convert_socket_type_to_local(int32_t type)
@@ -1069,6 +1081,55 @@ static int convert_socket_type_to_local(int32_t type)
 	return ltype;
 }
 
+#define EM_SOCK_STREAM  1
+#define EM_SOCK_DGRAM	2
+#define EM_SOCK_SEQPACKET 5
+#define EM_SOCK_RAW	3
+#define EM_SOCK_RDM	4
+#define EM_SOCK_PACKET	10
+
+static int32_t convert_socket_type_to_em(int type)
+{
+	int nonblock_type, cloexec_type;
+	int32_t ltype;
+
+#ifdef SOCK_NONBLOCK
+	nonblock_type = !!(type & SOCK_NONBLOCK);
+	type &= ~(int) SOCK_NONBLOCK;
+#else
+	nonblock_type = 0;
+#endif
+
+#ifdef SOCK_CLOEXEC
+	cloexec_type = !!(type & SOCK_CLOEXEC);
+	type &= ~(int) SOCK_CLOEXEC;
+#else
+	cloexec_type = 0;
+#endif
+
+	switch (type) {
+	case SOCK_STREAM: ltype = EM_SOCK_STREAM; break;
+	case SOCK_DGRAM: ltype = EM_SOCK_DGRAM; break;
+	case SOCK_SEQPACKET: ltype = EM_SOCK_SEQPACKET; break;
+	case SOCK_RAW: ltype = EM_SOCK_RAW; break;
+	case SOCK_RDM: ltype = EM_SOCK_RDM; break;
+#ifdef SOCK_PACKET
+	case SOCK_PACKET: ltype = EM_SOCK_PACKET; break;
+#endif
+	default: return -1;
+	}
+
+	if (nonblock_type) {
+		ltype |= EM_SOCK_NONBLOCK;
+	}
+
+	if (cloexec_type) {
+		ltype |= EM_SOCK_CLOEXEC;
+	}
+
+	return ltype;
+}
+
 #endif
 
 #define EM_AF_UNIX 1
@@ -1082,11 +1143,23 @@ static int convert_socket_domain_to_local(int32_t domain)
 	return domain;
 }
 
+static int32_t convert_socket_domain_to_em(int domain)
+{
+	return domain;
+}
+
 static int convert_proto_to_local(int domain, int32_t proto)
 {
 	(void)domain;
 	return proto;
 }
+
+static int32_t convert_proto_to_em(int32_t domain, int proto)
+{
+	(void)domain;
+	return proto;
+}
+
 
 #else
 
@@ -1112,6 +1185,33 @@ static int convert_socket_domain_to_local(int32_t domain)
 	case 5: return AF_APPLETALK;
 #ifdef AF_PACKET
 	case 17: return AF_PACKET;
+#endif
+	default: return -1;
+	}
+}
+
+static int32_t convert_socket_domain_to_em(int domain)
+{
+	switch (domain) {
+	case AF_UNIX: return EM_AF_UNIX;
+	case AF_INET: return EM_AF_INET;
+	case AF_INET6: return EM_AF_INET6;
+	case AF_IPX: return 4;
+#ifdef AF_NETLINK
+	case AF_NETLINK: return 16;
+#endif
+#ifdef AF_X25
+	case AF_X25: return 9;
+#endif
+#ifdef AF_AX25
+	case AF_AX25: return 3;
+#endif
+#ifdef AF_ATMPVC
+	case AF_ATMPVC: return 8;
+#endif
+	case AF_APPLETALK: return 5;
+#ifdef AF_PACKET
+	case AF_PACKET: return 17;
 #endif
 	default: return -1;
 	}
@@ -1160,6 +1260,58 @@ static int convert_proto_to_local(int domain, int32_t proto)
 		case 137: return IPPROTO_MPLS;
 #endif
 		case 255: return IPPROTO_RAW;
+		default: return -1;
+		}
+	} else {
+		if (proto)
+			return -1;
+		return 0;
+	}
+}
+
+static int32_t convert_proto_to_em(int32_t domain, int proto)
+{
+	if (domain == EM_AF_INET || domain == EM_AF_INET6) {
+		switch (proto) {
+		case IPPROTO_IP: return 0;
+		case IPPROTO_ICMP: return 1;
+		case IPPROTO_IGMP: return 2;
+		case IPPROTO_IPIP: return 4;
+		case IPPROTO_TCP: return 6;
+		case IPPROTO_EGP: return 8;
+		case IPPROTO_PUP: return 12;
+		case IPPROTO_UDP: return 17;
+		case IPPROTO_IDP: return 22;
+		case IPPROTO_TP: return 29;
+#ifdef IPPROTO_DCCP
+		case IPPROTO_DCCP: return 33;
+#endif
+		case IPPROTO_IPV6: return 41;
+		case IPPROTO_RSVP: return 46;
+		case IPPROTO_GRE: return 47;
+		case IPPROTO_ESP: return 50;
+		case IPPROTO_AH: return 51;
+#ifdef IPPROTO_MTP
+		case IPPROTO_MTP: return 92;
+#endif
+#ifdef IPPROTO_BEETPH
+		case IPPROTO_BEETPH: return 94;
+#endif
+		case IPPROTO_ENCAP: return 98;
+		case IPPROTO_PIM: return 103;
+#ifdef IPPROTO_COMP
+		case IPPROTO_COMP: return 108;
+#endif
+#ifdef IPPROTO_SCTP
+		case IPPROTO_SCTP: return 132;
+#endif
+#ifdef IPPROTO_UDPLITE
+		case IPPROTO_UDPLITE: return 136;
+#endif
+#if IPPROTO_MPLS
+		case IPPROTO_MPLS: return 137;
+#endif
+		case IPPROTO_RAW: return 255;
 		default: return -1;
 		}
 	} else {
@@ -1259,7 +1411,7 @@ static long read_sockaddr(struct sockaddr_storage *ss, size_t *size,
 }
 
 /* need to byte swap and adapt sockaddr to current platform */
-static long write_sockaddr(struct sockaddr_storage *ss, socklen_t ssize,
+static long write_sockaddr(struct sockaddr *ss, socklen_t ssize,
 			   char *addr, uint32_t addrlen, void *len)
 {
 	uint32_t newlen;
@@ -1419,7 +1571,7 @@ static long finish_acceptlike(long (*acceptlike)(int, struct sockaddr *, socklen
 	if (rret < 0)
 		return rret;
 
-	if (write_sockaddr(&ss, ssize, addr, addrlen, len)) {
+	if (write_sockaddr((struct sockaddr *) &ss, ssize, addr, addrlen, len)) {
 		/* NB: we have to abort here because we can't undo the sys_accept() */
 		wasmjit_emscripten_internal_abort("Failed to convert sockaddr");
 	}
@@ -1762,6 +1914,7 @@ typedef uint8_t em_unsigned_char;
 typedef uint32_t em_unsigned_long;
 typedef uint32_t em_fsblkcnt_t;
 typedef uint32_t em_fsfilcnt_t;
+typedef int32_t em_socklen_t;
 
 struct em_timespec {
 	em_time_t tv_sec;
@@ -5154,6 +5307,432 @@ uint32_t wasmjit_emscripten__fork(struct FuncInst *funcinst)
 	}
 	return (int32_t) ret;
 #endif
+}
+
+#define EM_EAI_BADFLAGS   (-1)
+#define EM_EAI_NONAME     (-2)
+#define EM_EAI_AGAIN      (-3)
+#define EM_EAI_FAIL       (-4)
+#define EM_EAI_FAMILY     (-6)
+#define EM_EAI_SOCKTYPE   (-7)
+#define EM_EAI_SERVICE    (-8)
+#define EM_EAI_MEMORY     (-10)
+#define EM_EAI_SYSTEM     (-11)
+#define EM_EAI_OVERFLOW   (-12)
+
+#define EM_AI_PASSIVE      0x01
+#define EM_AI_CANONNAME    0x02
+#define EM_AI_NUMERICHOST  0x04
+#define EM_AI_V4MAPPED     0x08
+#define EM_AI_ALL          0x10
+#define EM_AI_ADDRCONFIG   0x20
+#define EM_AI_NUMERICSERV  0x400
+
+struct em_addrinfo {
+	int32_t ai_flags;
+	int32_t ai_family;
+	int32_t ai_socktype;
+	int32_t ai_protocol;
+	em_socklen_t ai_addrlen;
+	uint32_t ai_addr;
+	uint32_t ai_canonname;
+	uint32_t ai_next;
+};
+
+#ifdef __KERNEL__
+int errno;
+#endif
+
+#ifdef __KERNEL__
+
+#define EAI_BADFLAGS   (-1)
+#define EAI_NONAME     (-2)
+#define EAI_AGAIN      (-3)
+#define EAI_FAIL       (-4)
+#define EAI_FAMILY     (-6)
+#define EAI_SOCKTYPE   (-7)
+#define EAI_SERVICE    (-8)
+#define EAI_MEMORY     (-10)
+#define EAI_SYSTEM     (-11)
+#define EAI_OVERFLOW   (-12)
+
+#define AI_PASSIVE      0x01
+#define AI_CANONNAME    0x02
+#define AI_NUMERICHOST  0x04
+#define AI_V4MAPPED     0x08
+#define AI_ALL          0x10
+#define AI_ADDRCONFIG   0x20
+#define AI_NUMERICSERV  0x400
+
+struct addrinfo {
+	int              ai_flags;
+	int              ai_family;
+	int              ai_socktype;
+	int              ai_protocol;
+	socklen_t        ai_addrlen;
+	struct sockaddr *ai_addr;
+	char            *ai_canonname;
+	struct addrinfo *ai_next;
+};
+
+
+/* TODO: implement this */
+
+int getaddrinfo(const char *node, const char *service,
+		const struct addrinfo *hints,
+		struct addrinfo **res)
+{
+	(void) node;
+	(void) service;
+	(void) hints;
+	(void) res;
+	errno = ENOSYS;
+	return EAI_SYSTEM;
+}
+
+void freeaddrinfo(struct addrinfo *res)
+{
+	(void) res;
+}
+
+const char *gai_strerror(int errcode)
+{
+	return "Unknown error";
+}
+
+#endif
+
+static int convert_ai_flags(int32_t ai_flags)
+{
+	int out = 0;
+#define p(n)					\
+	if (ai_flags & EM_AI_ ## n)		\
+		out |= AI_ ## n
+
+	p(PASSIVE);
+	p(CANONNAME);
+	p(NUMERICHOST);
+	p(V4MAPPED);
+	p(ALL);
+	p(ADDRCONFIG);
+	p(NUMERICSERV);
+
+#undef p
+
+	return out;
+}
+
+static int32_t back_convert_ai_flags(int ai_flags)
+{
+	int32_t out = 0;
+#define p(n)					\
+	if (ai_flags & AI_ ## n)		\
+		out |= EM_AI_ ## n
+
+	p(PASSIVE);
+	p(CANONNAME);
+	p(NUMERICHOST);
+	p(V4MAPPED);
+	p(ALL);
+	p(ADDRCONFIG);
+	p(NUMERICSERV);
+
+#undef p
+
+	return out;
+}
+
+static int32_t convert_getaddrinfo_return(int ret)
+{
+	switch (ret) {
+#define p(n) case EAI_ ## n: return EM_EAI_ ## n
+		p(BADFLAGS);
+		p(NONAME);
+		p(AGAIN);
+		p(FAIL);
+		p(FAMILY);
+		p(SOCKTYPE);
+		p(SERVICE);
+		p(MEMORY);
+		p(SYSTEM);
+		p(OVERFLOW);
+	case 0: return 0;
+	default: return -1;
+#undef p
+	}
+}
+
+static int back_convert_getaddrinfo_return(int32_t ret)
+{
+	switch (ret) {
+#define p(n) case EM_EAI_ ## n: return EAI_ ## n
+		p(BADFLAGS);
+		p(NONAME);
+		p(AGAIN);
+		p(FAIL);
+		p(FAMILY);
+		p(SOCKTYPE);
+		p(SERVICE);
+		p(MEMORY);
+		p(SYSTEM);
+		p(OVERFLOW);
+	case 0: return 0;
+	default: return -1;
+#undef p
+	}
+}
+
+uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
+					 uint32_t service,
+					 uint32_t emhintp,
+					 uint32_t out,
+					 struct FuncInst *funcinst)
+{
+	char *base;
+	struct em_addrinfo emhint;
+	int ret;
+	struct addrinfo hint, *hintp, *res;
+#ifndef SAME_SOCKADDR
+	struct sockaddr_storage ss;
+#endif
+	int32_t filter_protocol = 0;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, node, PATH_MAX)) {
+		ret = EAI_SYSTEM;
+		errno = EFAULT;
+		goto err;
+	}
+
+	if (!_wasmjit_emscripten_check_string(funcinst, service, PATH_MAX)) {
+		ret = EAI_SYSTEM;
+		errno = EFAULT;
+		goto err;
+	}
+
+	/* check that we can write a pointer to out */
+	if (!_wasmjit_emscripten_check_range(funcinst, out, sizeof(uint32_t))) {
+		ret = EAI_SYSTEM;
+		errno = EFAULT;
+		goto err;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	if (emhintp) {
+		if (_wasmjit_emscripten_copy_from_user(funcinst,
+						       &emhint,
+						       emhintp,
+						       sizeof(emhint))) {
+			ret = EAI_SYSTEM;
+			errno = EFAULT;
+			goto err;
+		}
+
+		emhint.ai_flags = int32_t_swap_bytes(emhint.ai_flags);
+		emhint.ai_family = int32_t_swap_bytes(emhint.ai_family);
+		emhint.ai_socktype = int32_t_swap_bytes(emhint.ai_socktype);
+		emhint.ai_protocol = int32_t_swap_bytes(emhint.ai_protocol);
+		emhint.ai_addrlen = int32_t_swap_bytes(emhint.ai_addrlen);
+		emhint.ai_addr = uint32_t_swap_bytes(emhint.ai_addr);
+		emhint.ai_canonname = uint32_t_swap_bytes(emhint.ai_canonname);
+		emhint.ai_next = uint32_t_swap_bytes(emhint.ai_next);
+
+		hint.ai_flags = convert_ai_flags(emhint.ai_flags);
+		hint.ai_family = emhint.ai_family
+			? convert_socket_domain_to_local(emhint.ai_family)
+			: 0;
+		if (hint.ai_family == -1) {
+			ret = EAI_SOCKTYPE;
+			goto err;
+		}
+		hint.ai_socktype = emhint.ai_socktype
+			? convert_socket_type_to_local(emhint.ai_socktype)
+			: 0;
+		if (hint.ai_socktype == -1) {
+			ret = EAI_SOCKTYPE;
+			goto err;
+		}
+		if (hint.ai_family) {
+			hint.ai_protocol = convert_proto_to_local(hint.ai_family, emhint.ai_protocol);
+			if (hint.ai_protocol == -1) {
+				ret = EAI_SOCKTYPE;
+				goto err;
+			}
+		} else {
+			hint.ai_protocol = 0;
+			filter_protocol = emhint.ai_protocol;
+		}
+
+		if (emhint.ai_addr) {
+#ifdef SAME_SOCKADDR
+			uint32_t ai_addr_2 = emhint.ai_addr;
+			if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
+								      &ai_addr_2,
+								      emhint.ai_addrlen)) {
+				ret = EAI_SYSTEM;
+				errno = EFAULT;
+				goto err;
+			}
+
+			hint.ai_addrlen = emhint.ai_addrlen;
+			hint.ai_addr = (struct sockaddr *)(base + ai_addr_2);
+#else
+			size_t ss_size;
+
+			if (read_sockaddr(&ss, &ss_size, emhint.ai_addr, emhint.ai_addrlen)) {
+				ret = EAI_SYSTEM;
+				errno = EFAULT;
+				goto err;
+			}
+			hint.ai_addrlen = ss_size;
+			hint.ai_addr = &ss;
+#endif
+		} else {
+			hint.ai_addrlen = 0;
+			hint.ai_addr = NULL;
+		}
+
+		if (emhint.ai_canonname) {
+			if (!_wasmjit_emscripten_check_string(funcinst, emhint.ai_canonname, PATH_MAX)) {
+				ret = EAI_SYSTEM;
+				errno = EFAULT;
+				goto err;
+			}
+
+			hint.ai_canonname = base + emhint.ai_canonname;
+		} else {
+			hint.ai_canonname = NULL;
+		}
+
+		/* hints shouldn't have ai_next set */
+		if (emhint.ai_next) {
+			ret = EAI_SYSTEM;
+			errno = EINVAL;
+			goto err;
+		}
+
+		hint.ai_next = NULL;
+
+		hintp = &hint;
+	} else {
+		hintp = NULL;
+	}
+
+	ret = getaddrinfo(base + node, base + service, hintp, &res);
+	if (ret) {
+	err:
+		if (ret == EAI_SYSTEM) {
+			assert(errno >= 0);
+			wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		}
+	} else {
+		uint32_t outp = out;
+		struct addrinfo *resp = res;
+		while (resp) {
+			/* allocate an em_addrinfo */
+			struct em_addrinfo towrite;
+			uint32_t ai;
+			int32_t ai_family, ai_protocol;
+
+			ai_family = convert_socket_domain_to_em(resp->ai_family);
+			if (ai_family == -1) {
+				break;
+			}
+
+			ai_protocol = convert_proto_to_em(ai_family, resp->ai_protocol);
+			if (ai_protocol == -1) {
+				break;
+			}
+
+			if (filter_protocol && ai_protocol != filter_protocol) {
+				resp = resp->ai_next;
+				continue;
+			}
+
+			ai = getMemory(funcinst, sizeof(towrite));
+			if (!ai) {
+				break;
+			}
+
+			towrite.ai_flags = back_convert_ai_flags(resp->ai_flags);
+			towrite.ai_family = ai_family;
+			towrite.ai_socktype = convert_socket_type_to_em(resp->ai_socktype);
+			if (towrite.ai_socktype == -1) {
+				break;
+			}
+			towrite.ai_protocol = ai_protocol;
+
+			if (resp->ai_canonname) {
+				size_t canonlen = strlen(resp->ai_canonname) + 1;
+				towrite.ai_canonname = getMemory(funcinst, canonlen);
+				if (!towrite.ai_canonname) {
+					break;
+				}
+				memcpy(base + towrite.ai_canonname,
+				       resp->ai_canonname,
+				       canonlen);
+			} else {
+				towrite.ai_canonname = 0;
+			}
+
+#ifdef SAME_SOCKADDR
+			towrite.ai_addr = getMemory(funcinst, resp->ai_addrlen);
+			if (!towrite.ai_addr) {
+				break;
+			}
+
+			memcpy(base + towrite.ai_addr, resp->ai_addr, resp->ai_addrlen);
+			towrite.ai_addrlen = uint32_t_swap_bytes(resp->ai_addrlen);
+#else
+			if (resp->ai_family == AF_INET) {
+				towrite.ai_addrlen = 16;
+			} else if (resp->ai_family == AF_INET6) {
+				towrite.ai_addrlen = 28;
+			} else if (resp->ai_family == AF_UNIX) {
+				towrite.ai_addrlen =
+					2 + resp->ai_addrlen -
+					offsetof(struct sockaddr_un, sun_path);
+			} else {
+				/* TODO: add support for more sockaddr types */
+				break;
+			}
+
+			towrite.ai_addr = getMemory(funcinst, towrite.ai_addrlen);
+			if (!towrite.ai_addr) {
+				break;
+			}
+
+			write_sockaddr(resp->ai_addr, resp->ai_addrlen,
+				       base + towrite.ai_addr, towrite.ai_addrlen,
+				       &towrite.ai_addrlen);
+#endif
+
+			towrite.ai_flags = uint32_t_swap_bytes(towrite.ai_flags);
+			towrite.ai_family = uint32_t_swap_bytes(towrite.ai_family);
+			towrite.ai_socktype = uint32_t_swap_bytes(towrite.ai_socktype);
+			towrite.ai_protocol = uint32_t_swap_bytes(towrite.ai_protocol);
+			towrite.ai_addr = uint32_t_swap_bytes(towrite.ai_addr);
+			towrite.ai_canonname = uint32_t_swap_bytes(towrite.ai_canonname);
+			towrite.ai_next = 0;
+
+			memcpy(base + ai, &towrite, sizeof(towrite));
+
+			{
+				uint32_t ai2 = uint32_t_swap_bytes(ai);
+				memcpy(base + outp, &ai2, sizeof(ai2));
+			}
+
+			outp = ai + offsetof(struct em_addrinfo, ai_next);
+			resp = resp->ai_next;
+		}
+
+		freeaddrinfo(res);
+		if (resp) {
+			wasmjit_emscripten_internal_abort("failed to allocate memory");
+		}
+	}
+
+	return convert_getaddrinfo_return(ret);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
