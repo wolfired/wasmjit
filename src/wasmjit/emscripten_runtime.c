@@ -1025,10 +1025,10 @@ static int convert_socket_type_to_local(int32_t type)
 
 #define EM_SOCK_NONBLOCK 2048
 	nonblock_type = !!(type & EM_SOCK_NONBLOCK);
-	type &= ~(int) EM_SOCK_NONBLOCK;
+	type &= ~(int32_t) EM_SOCK_NONBLOCK;
 #define EM_SOCK_CLOEXEC 524288
 	cloexec_type = !!(type & EM_SOCK_CLOEXEC);
-	type &= ~(int) EM_SOCK_CLOEXEC;
+	type &= ~(int32_t) EM_SOCK_CLOEXEC;
 
 	switch (type) {
 	case 1: ltype = SOCK_STREAM; break;
