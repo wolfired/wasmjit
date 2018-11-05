@@ -872,15 +872,26 @@ void wasmjit_emscripten_abort(uint32_t what, struct FuncInst *funcinst)
 	wasmjit_emscripten_internal_abort(abort_string);
 }
 
-static uint32_t getMemory(struct EmscriptenContext *ctx,
+static uint32_t getMemory(struct FuncInst *funcinst,
 			  uint32_t amount)
 {
+	struct EmscriptenContext *ctx;
 	union ValueUnion input, output;
 	input.i32 = amount;
+
+	ctx = _wasmjit_emscripten_get_context(funcinst);
 	if (!ctx->malloc_inst)
-		wasmjit_emscripten_internal_abort("No allocator");
+		return 0;
 	if (wasmjit_invoke_function(ctx->malloc_inst, &input, &output))
-		wasmjit_emscripten_internal_abort("Failed to invoke allocator");
+		return 0;
+
+	/* check if userspace is malicious */
+	if (!_wasmjit_emscripten_check_range(funcinst,
+					     output.i32,
+					     amount)) {
+		return 0;
+	}
+
 	return output.i32;
 }
 
@@ -937,21 +948,13 @@ void wasmjit_emscripten____buildEnvironment(uint32_t environ_arg,
 		n_envs += 1;
 	}
 
-	poolPtr = getMemory(ctx, total_pool_size);
+	poolPtr = getMemory(funcinst, total_pool_size);
 	if (!poolPtr)
 		wasmjit_emscripten_internal_abort("Failed to allocate memory in critical region");
 
-	/* double check user space isn't malicious */
-	if (!_wasmjit_emscripten_check_range(funcinst, poolPtr, total_pool_size))
-		wasmjit_trap(WASMJIT_TRAP_MEMORY_OVERFLOW);
-
-	envPtr = getMemory(ctx, (n_envs + 1) * 4);
+	envPtr = getMemory(funcinst, (n_envs + 1) * 4);
 	if (!envPtr)
 		wasmjit_emscripten_internal_abort("Failed to allocate memory in critical region");
-
-	/* double check user space isn't malicious */
-	if (!_wasmjit_emscripten_check_range(funcinst, envPtr, (n_envs + 1) * 4))
-		wasmjit_trap(WASMJIT_TRAP_MEMORY_OVERFLOW);
 
 	{
 		uint32_t ep;
