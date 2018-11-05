@@ -153,6 +153,7 @@ enum {
 	WASMJIT_TRAP_ABORT,
 	WASMJIT_TRAP_STACK_OVERFLOW,
 	WASMJIT_TRAP_INTEGER_OVERFLOW,
+	WASMJIT_TRAP_EXIT,
 };
 
 __attribute__ ((unused))
@@ -183,6 +184,9 @@ static const char *wasmjit_trap_reason_to_string(int reason) {
 	case WASMJIT_TRAP_ABORT:
 		msg = "internal abort";
 		break;
+	case WASMJIT_TRAP_EXIT:
+		msg = "exit";
+		break;
 	default:
 		assert(0);
 		__builtin_unreachable();
@@ -194,6 +198,7 @@ struct FuncInst *wasmjit_resolve_indirect_call(const struct TableInst *tableinst
 					       const struct FuncType *expected_type,
 					       uint32_t idx);
 void wasmjit_trap(int reason) __attribute__((noreturn));
+void wasmjit_exit(int status) __attribute__((noreturn));
 void *wasmjit_stack_top(void);
 
 void wasmjit_free_func_inst(struct FuncInst *funcinst);
@@ -211,6 +216,9 @@ union ExportPtr wasmjit_get_export(const struct ModuleInst *, const char *name, 
 
 union ValueUnion wasmjit_invoke_function_raw(struct FuncInst *funcinst,
 					     union ValueUnion *values);
+
+#define WASMJIT_IS_TRAP_ERROR(ret) ((ret) >> 8)
+#define WASMJIT_DECODE_TRAP_ERROR(ret) ((ret) >> 8)
 
 int wasmjit_invoke_function(struct FuncInst *funcinst,
 			    union ValueUnion *values,

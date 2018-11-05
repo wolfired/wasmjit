@@ -434,11 +434,8 @@ int wasmjit_emscripten_invoke_main(struct MemInst *meminst,
 	}
 
 	if (ret) {
-		if (ret > 0) {
-			/* these are trap return codes, shift it left
-			   8 bits to distinguish from return code from
-			   normal execution of wasm main() */
-			ret = WASMJIT_ENCODE_TRAP_ERROR(ret);
+		if (WASMJIT_DECODE_TRAP_ERROR(ret) == WASMJIT_TRAP_EXIT) {
+			ret &= 0xff;
 		}
 
 		return ret;
@@ -5129,6 +5126,14 @@ uint32_t wasmjit_emscripten__clock_gettime(uint32_t clk_id, uint32_t tp,
 		wasmjit_emscripten____setErrNo(convert_errno(-ret), funcinst);
 		return (int32_t) -1;
 	}
+}
+
+__attribute__((noreturn))
+void wasmjit_emscripten__exit(uint32_t status,
+			      struct FuncInst *funcinst)
+{
+	(void) funcinst;
+	wasmjit_exit(status);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

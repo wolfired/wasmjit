@@ -44,6 +44,12 @@ void wasmjit_trap(int reason)
 	exit(-1);
 }
 
+__attribute__((noreturn))
+void wasmjit_exit(int status)
+{
+	exit(status);
+}
+
 void wasmjit_init_static_module(struct StaticModuleInst *smi)
 {
 	size_t i;

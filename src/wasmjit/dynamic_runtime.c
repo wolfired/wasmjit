@@ -154,7 +154,14 @@ __attribute__((noreturn))
 void wasmjit_trap(int reason)
 {
 	assert(reason);
-	longjmp(*wasmjit_get_jmp_buf(), reason);
+	longjmp(*wasmjit_get_jmp_buf(), (reason << 8));
+}
+
+__attribute__((noreturn))
+void wasmjit_exit(int status)
+{
+	assert(status);
+	longjmp(*wasmjit_get_jmp_buf(), (WASMJIT_TRAP_EXIT << 8) | status);
 }
 
 int wasmjit_invoke_function(struct FuncInst *funcinst,
