@@ -346,6 +346,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->buildEnvironmentCalled = 0;
 	ctx->fd_table.n_elts = 0;
 	ctx->grp_file = NULL;
+	ctx->gai_strerror_buffer = 0;
 
 	return 0;
 }
@@ -5733,6 +5734,35 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 	}
 
 	return convert_getaddrinfo_return(ret);
+}
+
+uint32_t wasmjit_emscripten__gai_strerror(uint32_t errcode,
+					  struct FuncInst *funcinst)
+{
+#define GAI_STRERROR_BUF_SIZE 256
+
+	const char *msg;
+	char *base;
+	int sys_errcode;
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+
+	if (!ctx->gai_strerror_buffer) {
+		ctx->gai_strerror_buffer = getMemory(funcinst, GAI_STRERROR_BUF_SIZE);
+		if (!ctx->gai_strerror_buffer) {
+			wasmjit_emscripten_internal_abort("couldn't allocate gai_strerror buffer");
+		}
+	}
+
+	sys_errcode = back_convert_getaddrinfo_return(errcode);
+
+	msg = gai_strerror(sys_errcode);
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	strncpy(base + ctx->gai_strerror_buffer, msg, GAI_STRERROR_BUF_SIZE);
+	(base + ctx->gai_strerror_buffer)[GAI_STRERROR_BUF_SIZE - 1] = '\0';
+
+	return ctx->gai_strerror_buffer;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
