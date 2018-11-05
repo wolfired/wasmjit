@@ -5136,6 +5136,23 @@ void wasmjit_emscripten__exit(uint32_t status,
 	wasmjit_exit(status);
 }
 
+uint32_t wasmjit_emscripten__fork(struct FuncInst *funcinst)
+{
+#ifdef __KERNEL__
+	/* TODO: implement for kernel */
+	wasmjit_emscripten____setErrNo(EM_EAGAIN, funcinst);
+	return -1;
+#else
+	int ret;
+	ret = fork();
+	if (ret < 0) {
+		assert(errno >= 0);
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	}
+	return (int32_t) ret;
+#endif
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
