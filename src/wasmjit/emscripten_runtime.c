@@ -347,6 +347,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->fd_table.n_elts = 0;
 	ctx->grp_file = NULL;
 	ctx->gai_strerror_buffer = 0;
+	ctx->getenv_buffer = 0;
 
 	return 0;
 }
@@ -5401,6 +5402,12 @@ const char *gai_strerror(int errcode)
 	return "Unknown error";
 }
 
+char *getenv(const char *name)
+{
+	(void) name;
+	return NULL;
+}
+
 #endif
 
 static int convert_ai_flags(int32_t ai_flags)
@@ -5763,6 +5770,37 @@ uint32_t wasmjit_emscripten__gai_strerror(uint32_t errcode,
 	(base + ctx->gai_strerror_buffer)[GAI_STRERROR_BUF_SIZE - 1] = '\0';
 
 	return ctx->gai_strerror_buffer;
+}
+
+uint32_t wasmjit_emscripten__getenv(uint32_t name,
+				    struct FuncInst *funcinst)
+{
+	char *base, *env;
+	uint32_t ret;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, name, PATH_MAX)) {
+		return 0;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	env = getenv(base + name);
+
+	if (env) {
+		struct EmscriptenContext *ctx =
+			_wasmjit_emscripten_get_context(funcinst);
+		if (ctx->getenv_buffer) {
+			freeMemory(ctx, ctx->getenv_buffer);
+		}
+		ret = ctx->getenv_buffer = getMemory(funcinst, strlen(env) + 1);
+		if (ret) {
+			memcpy(base + ret, env, strlen(env) + 1);
+		}
+	} else {
+		ret = 0;
+	}
+
+	return ret;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
