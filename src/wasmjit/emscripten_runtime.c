@@ -348,6 +348,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->grp_file = NULL;
 	ctx->gai_strerror_buffer = 0;
 	ctx->getenv_buffer = 0;
+	ctx->getgrent_buffer = 0;
 
 	return 0;
 }
@@ -5408,6 +5409,19 @@ char *getenv(const char *name)
 	return NULL;
 }
 
+struct group {
+	char *gr_name;
+	char *gr_passwd;
+	gid_t gr_gid;
+	char **gr_mem;
+};
+
+struct group *getgrent(void)
+{
+	errno = ENOMEM;
+	return NULL;
+}
+
 #endif
 
 static int convert_ai_flags(int32_t ai_flags)
@@ -5801,6 +5815,103 @@ uint32_t wasmjit_emscripten__getenv(uint32_t name,
 	}
 
 	return ret;
+}
+
+struct em_group {
+	uint32_t gr_name;
+	uint32_t gr_passwd;
+	uint32_t gr_gid;
+	uint32_t gr_mem;
+};
+
+uint32_t wasmjit_emscripten__getgrent(struct FuncInst *funcinst)
+{
+	struct group *gr;
+	char *base;
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	errno = 0;
+	gr = getgrent();
+	if (!gr) {
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		return 0;
+	}
+
+	if (ctx->getgrent_buffer) {
+		freeMemory(ctx, ctx->getgrent_buffer);
+		ctx->getgrent_buffer = 0;
+	}
+
+	{
+		uint32_t string_offset, ptr_offset;
+		size_t num_groups = 0, total_string_size = 0;
+		char **gr_mem_iter;
+		for (gr_mem_iter = gr->gr_mem; *gr_mem_iter; ++gr_mem_iter) {
+			total_string_size += strlen(*gr_mem_iter) + 1;
+			num_groups += 1;
+		}
+
+		total_string_size += strlen(gr->gr_name) + 1;
+		total_string_size += strlen(gr->gr_passwd) + 1;
+
+		ctx->getgrent_buffer = getMemory(funcinst, sizeof(struct em_group) + (num_groups + 1) * 4 + total_string_size);
+		if (!ctx->getgrent_buffer) {
+			wasmjit_emscripten____setErrNo(EM_ENOMEM, funcinst);
+			return 0;
+		}
+
+		ptr_offset = ctx->getgrent_buffer + sizeof(struct em_group);
+		string_offset = ctx->getgrent_buffer + sizeof(struct em_group) + (num_groups + 1) * 4;
+
+		{
+			uint32_t swapped_ptr_offset = uint32_t_swap_bytes(ptr_offset);
+			memcpy(base + ctx->getgrent_buffer + offsetof(struct em_group, gr_mem),
+			       &swapped_ptr_offset,
+			       sizeof(swapped_ptr_offset));
+		}
+
+		for (gr_mem_iter = gr->gr_mem; *gr_mem_iter; ++gr_mem_iter) {
+			uint32_t swapped_string_offset = uint32_t_swap_bytes(string_offset);
+			size_t group_size = strlen(*gr_mem_iter) + 1;
+			memcpy(base + ptr_offset, &swapped_string_offset, sizeof(swapped_string_offset));
+			memcpy(base + string_offset, *gr_mem_iter, group_size);
+			ptr_offset += 4;
+			string_offset += group_size;
+		}
+
+		/* add null terminator */
+		memset(base + ptr_offset, 0, 4);
+
+		{
+			uint32_t swapped_string_offset = uint32_t_swap_bytes(string_offset);
+			size_t name_size = strlen(gr->gr_name) + 1;
+			memcpy(base + ctx->getgrent_buffer + offsetof(struct em_group, gr_name),
+			       &swapped_string_offset,
+			       sizeof(swapped_string_offset));
+			memcpy(base + string_offset, gr->gr_name, name_size);
+			string_offset += name_size;
+		}
+
+		{
+			uint32_t swapped_string_offset = uint32_t_swap_bytes(string_offset);
+			memcpy(base + ctx->getgrent_buffer + offsetof(struct em_group, gr_passwd),
+			       &swapped_string_offset,
+			       sizeof(swapped_string_offset));
+			memcpy(base + string_offset, gr->gr_passwd, strlen(gr->gr_passwd) + 1);
+		}
+
+		{
+			uint32_t swapped_gid = uint32_t_swap_bytes((uint32_t) gr->gr_gid);
+			memcpy(base + ctx->getgrent_buffer + offsetof(struct em_group, gr_gid),
+			       &swapped_gid,
+			       sizeof(swapped_gid));
+		}
+	}
+
+	return ctx->getgrent_buffer;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

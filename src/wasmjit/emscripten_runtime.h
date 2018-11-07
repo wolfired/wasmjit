@@ -57,6 +57,7 @@ struct EmscriptenContext {
 	struct EmFILE *grp_file;
 	uint32_t gai_strerror_buffer;
 	uint32_t getenv_buffer;
+	uint32_t getgrent_buffer;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t
