@@ -5181,14 +5181,17 @@ uint32_t wasmjit_emscripten__execve(uint32_t pathname,
 
 	if (!_wasmjit_emscripten_check_string(funcinst, pathname, PATH_MAX)) {
 		errno = EFAULT;
+		ret = -1;
 		goto err;
 	}
 
 	if ((errno = copy_string_array(funcinst, argv, &largv))) {
+		ret = -1;
 		goto err;
 	}
 
 	if ((errno = copy_string_array(funcinst, envp, &lenvp))) {
+		ret = -1;
 		goto err;
 	}
 
