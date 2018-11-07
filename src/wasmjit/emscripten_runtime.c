@@ -5596,7 +5596,7 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 			? convert_socket_domain_to_local(emhint.ai_family)
 			: 0;
 		if (hint.ai_family == -1) {
-			ret = EAI_SOCKTYPE;
+			ret = EAI_FAMILY;
 			goto err;
 		}
 		hint.ai_socktype = emhint.ai_socktype
@@ -5609,7 +5609,7 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 		if (hint.ai_family) {
 			hint.ai_protocol = convert_proto_to_local(hint.ai_family, emhint.ai_protocol);
 			if (hint.ai_protocol == -1) {
-				ret = EAI_SOCKTYPE;
+				ret = EAI_FAMILY;
 				goto err;
 			}
 		} else {
