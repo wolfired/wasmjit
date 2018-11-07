@@ -117,10 +117,10 @@ struct linux_dirent64 {
 	char d_name[1];
 };
 
+#endif
+
 /* use something reasonable */
 #define MAX_ARG_STRLEN (4096 * 32)
-
-#endif
 
 typedef struct statvfs user_statvfs;
 

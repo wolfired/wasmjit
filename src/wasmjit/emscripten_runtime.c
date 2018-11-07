@@ -1424,7 +1424,7 @@ static long write_sockaddr(struct sockaddr *ss, socklen_t ssize,
 		return 0;
 	}
 
-	switch (ss->ss_family) {
+	switch (ss->sa_family) {
 	case AF_UNIX: {
 		struct sockaddr_un sun;
 		uint16_t f = uint16_t_swap_bytes(EM_AF_UNIX);
@@ -1854,7 +1854,7 @@ static long finish_recvfrom(int32_t fd,
 		return rret;
 
 	if (dest_addr) {
-		if (write_sockaddr(&ss, ssize, dest_addr, addrlen, addrlenp)) {
+		if (write_sockaddr((struct sockaddr *) &ss, ssize, dest_addr, addrlen, addrlenp)) {
 			/* NB: we have to abort here because we can't undo the sys_accept() */
 			wasmjit_emscripten_internal_abort("Failed to convert sockaddr");
 		}
@@ -5424,6 +5424,24 @@ struct group *getgrent(void)
 
 #endif
 
+static int check_ai_flags(int32_t ai_flags)
+{
+	uint32_t all =
+		EM_AI_PASSIVE |
+		EM_AI_CANONNAME |
+		EM_AI_NUMERICHOST |
+#ifdef AI_V4MAPPED
+		EM_AI_V4MAPPED |
+#endif
+#ifdef AI_ALL
+		EM_AI_ALL |
+#endif
+		EM_AI_ADDRCONFIG |
+		EM_AI_NUMERICSERV |
+		0;
+	return !(ai_flags & ~all);
+}
+
 static int convert_ai_flags(int32_t ai_flags)
 {
 	int out = 0;
@@ -5434,8 +5452,12 @@ static int convert_ai_flags(int32_t ai_flags)
 	p(PASSIVE);
 	p(CANONNAME);
 	p(NUMERICHOST);
+#ifdef AI_V4MAPPED
 	p(V4MAPPED);
+#endif
+#ifdef AI_ALL
 	p(ALL);
+#endif
 	p(ADDRCONFIG);
 	p(NUMERICSERV);
 
@@ -5454,8 +5476,12 @@ static int32_t back_convert_ai_flags(int ai_flags)
 	p(PASSIVE);
 	p(CANONNAME);
 	p(NUMERICHOST);
+#ifdef AI_V4MAPPED
 	p(V4MAPPED);
+#endif
+#ifdef AI_ALL
 	p(ALL);
+#endif
 	p(ADDRCONFIG);
 	p(NUMERICSERV);
 
@@ -5559,6 +5585,12 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 		emhint.ai_canonname = uint32_t_swap_bytes(emhint.ai_canonname);
 		emhint.ai_next = uint32_t_swap_bytes(emhint.ai_next);
 
+		if (!check_ai_flags(emhint.ai_flags)) {
+			ret = EAI_BADFLAGS;
+			goto err;
+
+		}
+
 		hint.ai_flags = convert_ai_flags(emhint.ai_flags);
 		hint.ai_family = emhint.ai_family
 			? convert_socket_domain_to_local(emhint.ai_family)
@@ -5586,8 +5618,8 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 		}
 
 		if (emhint.ai_addr) {
-#ifdef SAME_SOCKADDR
 			uint32_t ai_addr_2 = emhint.ai_addr;
+			char *uaddr;
 			if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
 								      &ai_addr_2,
 								      emhint.ai_addrlen)) {
@@ -5596,18 +5628,21 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 				goto err;
 			}
 
+			uaddr = base + ai_addr_2;
+
+#ifdef SAME_SOCKADDR
 			hint.ai_addrlen = emhint.ai_addrlen;
-			hint.ai_addr = (struct sockaddr *)(base + ai_addr_2);
+			hint.ai_addr = (struct sockaddr *)uaddr;
 #else
 			size_t ss_size;
 
-			if (read_sockaddr(&ss, &ss_size, emhint.ai_addr, emhint.ai_addrlen)) {
+			if (read_sockaddr(&ss, &ss_size, uaddr, emhint.ai_addrlen)) {
 				ret = EAI_SYSTEM;
 				errno = EFAULT;
 				goto err;
 			}
 			hint.ai_addrlen = ss_size;
-			hint.ai_addr = &ss;
+			hint.ai_addr = (struct sockaddr *) &ss;
 #endif
 		} else {
 			hint.ai_addrlen = 0;
