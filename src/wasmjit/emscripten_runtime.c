@@ -5993,6 +5993,11 @@ uint32_t wasmjit_emscripten__getgrnam(uint32_t name,
 	return convert_group(funcinst, gr);
 }
 
+uint32_t wasmjit_emscripten__getpagesize(struct FuncInst *funcinst) {
+	(void) funcinst;
+	return getpagesize();
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
