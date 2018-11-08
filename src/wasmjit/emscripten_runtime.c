@@ -3899,7 +3899,7 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 #if defined(__GNUC__)
 #define ISUNSIGNED(a) ((typeof(a))0 - 1 > 0)
 #else
-#define ISUNSIGNED(a) ((a) >= 0 && ~(a) >= 0)
+#define ISUNSIGNED(a) (((a) - (a)) - 1 > 0)
 #endif
 
 #define OVERFLOWS(a) (							\
