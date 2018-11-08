@@ -5871,7 +5871,7 @@ uint32_t wasmjit_emscripten__getenv(uint32_t name,
 struct em_group {
 	uint32_t gr_name;
 	uint32_t gr_passwd;
-	uint32_t gr_gid;
+	em_gid_t gr_gid;
 	uint32_t gr_mem;
 };
 
