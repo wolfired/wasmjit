@@ -5231,6 +5231,9 @@ uint32_t wasmjit_emscripten__clock_gettime(uint32_t clk_id, uint32_t tp,
 	int32_t ret;
 	clockid_t sys_clk_id;
 
+#if IS_LINUX
+	sys_clk_id = clk_id;
+#else
 	switch (clk_id) {
 #define p(n) case EM_CLOCK_ ## n: sys_clk_id = CLOCK_ ##n; break
 		p(REALTIME);
@@ -5265,6 +5268,7 @@ uint32_t wasmjit_emscripten__clock_gettime(uint32_t clk_id, uint32_t tp,
 #undef p
 	default: ret = -EINVAL; goto err;
 	}
+#endif
 
 	ret = sys_clock_gettime(sys_clk_id, &tspec);
 	if (ret >= 0) {
