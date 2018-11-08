@@ -5432,6 +5432,12 @@ struct group *getgrent(void)
 	return NULL;
 }
 
+struct group *getgrnam(const char *name)
+{
+	errno = ENOSYS;
+	return NULL;
+}
+
 #endif
 
 static int check_ai_flags(int32_t ai_flags)
@@ -5869,21 +5875,13 @@ struct em_group {
 	uint32_t gr_mem;
 };
 
-uint32_t wasmjit_emscripten__getgrent(struct FuncInst *funcinst)
+static uint32_t convert_group(struct FuncInst *funcinst, struct group *gr)
 {
-	struct group *gr;
 	char *base;
 	struct EmscriptenContext *ctx =
 		_wasmjit_emscripten_get_context(funcinst);
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
-
-	errno = 0;
-	gr = getgrent();
-	if (!gr) {
-		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
-		return 0;
-	}
 
 	if (ctx->getgrent_buffer) {
 		freeMemory(ctx, ctx->getgrent_buffer);
@@ -5957,6 +5955,42 @@ uint32_t wasmjit_emscripten__getgrent(struct FuncInst *funcinst)
 	}
 
 	return ctx->getgrent_buffer;
+}
+
+uint32_t wasmjit_emscripten__getgrent(struct FuncInst *funcinst)
+{
+	struct group *gr;
+
+	errno = 0;
+	gr = getgrent();
+	if (!gr) {
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		return 0;
+	}
+
+	return convert_group(funcinst, gr);
+}
+
+uint32_t wasmjit_emscripten__getgrnam(uint32_t name,
+				      struct FuncInst *funcinst)
+{
+	struct group *gr;
+	char *base;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, name, PATH_MAX)) {
+		return 0;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	errno = 0;
+	gr = getgrnam(base + name);
+	if (!gr) {
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		return 0;
+	}
+
+	return convert_group(funcinst, gr);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
