@@ -349,6 +349,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->gai_strerror_buffer = 0;
 	ctx->getenv_buffer = 0;
 	ctx->getgrent_buffer = 0;
+	ctx->getpwent_buffer = 0;
 
 	return 0;
 }
@@ -5438,6 +5439,22 @@ struct group *getgrnam(const char *name)
 	return NULL;
 }
 
+struct passwd {
+	char   *pw_name;
+	char   *pw_passwd;
+	uid_t   pw_uid;
+	gid_t   pw_gid;
+	char   *pw_gecos;
+	char   *pw_dir;
+	char   *pw_shell;
+};
+
+struct passwd *getpwnam(const char *name)
+{
+	errno = ENOSYS;
+	return NULL;
+}
+
 #endif
 
 static int check_ai_flags(int32_t ai_flags)
@@ -5996,6 +6013,115 @@ uint32_t wasmjit_emscripten__getgrnam(uint32_t name,
 uint32_t wasmjit_emscripten__getpagesize(struct FuncInst *funcinst) {
 	(void) funcinst;
 	return getpagesize();
+}
+
+struct em_passwd {
+	uint32_t pw_name;
+	uint32_t pw_passwd;
+	em_uid_t pw_uid;
+	em_gid_t pw_gid;
+	uint32_t pw_gecos;
+	uint32_t pw_dir;
+	uint32_t pw_shell;
+};
+
+static void write_uint32_t(char *base, uint32_t n)
+{
+	n = uint32_t_swap_bytes(n);
+	memcpy(base, &n, sizeof(n));
+}
+
+static uint32_t convert_passwd(struct FuncInst *funcinst, struct passwd *pw)
+{
+	uint32_t string_offset;
+	size_t name_sz, passwd_sz, gecos_sz, dir_sz, shell_sz, total_string_size = 0;
+	char *base;
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	if (ctx->getpwent_buffer) {
+		freeMemory(ctx, ctx->getpwent_buffer);
+		ctx->getpwent_buffer = 0;
+	}
+
+	total_string_size += (name_sz = strlen(pw->pw_name) + 1);
+	total_string_size += (passwd_sz = strlen(pw->pw_passwd) + 1);
+	total_string_size += (gecos_sz = strlen(pw->pw_gecos) + 1);
+	total_string_size += (dir_sz = strlen(pw->pw_dir) + 1);
+	total_string_size += (shell_sz = strlen(pw->pw_shell) + 1);
+
+	ctx->getpwent_buffer = getMemory(funcinst, sizeof(struct em_passwd) + total_string_size);
+	if (!ctx->getpwent_buffer) {
+		wasmjit_emscripten____setErrNo(EM_ENOMEM, funcinst);
+		return 0;
+	}
+
+	string_offset = ctx->getpwent_buffer + sizeof(struct em_passwd);
+
+	write_uint32_t(base + ctx->getpwent_buffer +
+		       offsetof(struct em_passwd, pw_name),
+		       string_offset);
+	memcpy(base + string_offset, pw->pw_name, name_sz);
+	string_offset += name_sz;
+
+	write_uint32_t(base + ctx->getpwent_buffer +
+		       offsetof(struct em_passwd, pw_passwd),
+		       string_offset);
+	memcpy(base + string_offset, pw->pw_passwd, passwd_sz);
+	string_offset += passwd_sz;
+
+	write_uint32_t(base + ctx->getpwent_buffer +
+		       offsetof(struct em_passwd, pw_gecos),
+		       string_offset);
+	memcpy(base + string_offset, pw->pw_gecos, gecos_sz);
+	string_offset += gecos_sz;
+
+	write_uint32_t(base + ctx->getpwent_buffer +
+		       offsetof(struct em_passwd, pw_dir),
+		       string_offset);
+	memcpy(base + string_offset, pw->pw_dir, dir_sz);
+	string_offset += dir_sz;
+
+	write_uint32_t(base + ctx->getpwent_buffer +
+		       offsetof(struct em_passwd, pw_shell),
+		       string_offset);
+	memcpy(base + string_offset, pw->pw_shell, shell_sz);
+	string_offset += shell_sz;
+
+
+	write_uint32_t(base + ctx->getpwent_buffer +
+		       offsetof(struct em_passwd, pw_uid),
+		       pw->pw_uid);
+
+	write_uint32_t(base + ctx->getpwent_buffer +
+		       offsetof(struct em_passwd, pw_gid),
+		       pw->pw_gid);
+
+	return ctx->getpwent_buffer;
+}
+
+uint32_t wasmjit_emscripten__getpwnam(uint32_t name,
+				      struct FuncInst *funcinst)
+{
+	struct passwd *pw;
+	char *base;
+
+	if (!_wasmjit_emscripten_check_string(funcinst, name, PATH_MAX)) {
+		return 0;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	errno = 0;
+	pw = getpwnam(base + name);
+	if (!pw) {
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		return 0;
+	}
+
+	return convert_passwd(funcinst, pw);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

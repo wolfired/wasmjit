@@ -58,6 +58,7 @@ struct EmscriptenContext {
 	uint32_t gai_strerror_buffer;
 	uint32_t getenv_buffer;
 	uint32_t getgrent_buffer;
+	uint32_t getpwent_buffer;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t
