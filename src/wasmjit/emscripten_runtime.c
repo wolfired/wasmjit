@@ -5250,6 +5250,9 @@ uint32_t wasmjit_emscripten__clock_gettime(uint32_t clk_id, uint32_t tp,
 #ifdef CLOCK_REALTIME_COARSE
 		p(REALTIME_COARSE);
 #endif
+#ifdef CLOCK_MONOTONIC_COARSE
+		p(MONOTONIC_COARSE);
+#endif
 #ifdef CLOCK_BOOTTIME
 		p(BOOTTIME);
 #endif
