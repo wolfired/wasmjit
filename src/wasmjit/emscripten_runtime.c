@@ -1878,6 +1878,11 @@ struct em_timeval {
 	uint32_t tv_sec, tv_usec;
 };
 
+struct em_timezone {
+	int32_t tz_minuteswest;
+	int32_t tz_dsttime;
+};
+
 #define EM_FD_SETSIZE 1024
 
 typedef struct {
@@ -2005,6 +2010,23 @@ static int convert_sockopt(int32_t level,
 	default: return -1;
 	}
 	return 0;
+}
+
+static size_t write_timeval(char *emtv,
+			    struct timeval *tv)
+{
+	struct em_timeval v;
+#if __LONG_WIDTH__ > 32
+	if (tv->tv_sec > INT32_MAX ||
+	    tv->tv_sec < INT32_MIN ||
+	    tv->tv_usec > INT32_MAX ||
+	    tv->tv_usec < INT32_MIN)
+		return 0;
+#endif
+	v.tv_sec = int32_t_swap_bytes(tv->tv_sec);
+	v.tv_usec = int32_t_swap_bytes(tv->tv_usec);
+	memcpy(emtv, &v, sizeof(v));
+	return sizeof(v);
 }
 
 static long finish_setsockopt(int32_t fd,
@@ -2204,18 +2226,9 @@ static long finish_getsockopt(int32_t fd,
 		break;
 	}
 	case OPT_TYPE_TIMEVAL: {
-		struct em_timeval v;
-#if __LONG_WIDTH__ > 32
-		if (real_optval.timeval.tv_sec > INT32_MAX ||
-		    real_optval.timeval.tv_sec < INT32_MIN ||
-		    real_optval.timeval.tv_usec > INT32_MAX ||
-		    real_optval.timeval.tv_usec < INT32_MIN)
+		newlen = write_timeval(optval, &real_optval.timeval);
+		if (!newlen)
 			wasmjit_emscripten_internal_abort("Failed to convert sockopt");
-#endif
-		v.tv_sec = uint32_t_swap_bytes((uint32_t) real_optval.timeval.tv_sec);
-		v.tv_usec = uint32_t_swap_bytes((uint32_t) real_optval.timeval.tv_usec);
-		memcpy(optval, &v, sizeof(v));
-		newlen = sizeof(v);
 		break;
 	}
 	case OPT_TYPE_STRING: {
@@ -6122,6 +6135,56 @@ uint32_t wasmjit_emscripten__getpwnam(uint32_t name,
 	}
 
 	return convert_passwd(funcinst, pw);
+}
+
+uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
+					  struct FuncInst *funcinst)
+{
+	char *base;
+	struct timeval tv;
+	struct timezone tz;
+	long rret;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, emtv, sizeof(struct em_timeval)))
+		return -EM_EFAULT;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, emtz, sizeof(struct em_timezone)))
+		return -EM_EFAULT;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	rret = sys_gettimeofday(&tv, &tz);
+	if (rret < 0) {
+		goto err;
+	} else {
+		struct em_timezone emtzl;
+
+		if (!write_timeval(base + emtv, &tv)) {
+			rret = -EM_EOVERFLOW;
+			goto err;
+		}
+
+#if __INT_WIDTH__ > 32
+		if (tz.tz_minuteswest > INT32_MAX ||
+		    tz.tz_minuteswest < INT32_MIN ||
+		    tz.tz_dsttime > INT32_MAX ||
+		    tz.tz_dsttime < INT32_MIN) {
+			rret = -EM_EOVERFLOW;
+			goto err;
+		}
+#endif
+
+		emtzl.tz_minuteswest = int32_t_swap_bytes((int32_t) tz.tz_minuteswest);
+		emtzl.tz_dsttime = int32_t_swap_bytes((int32_t) tz.tz_dsttime);
+
+		memcpy(base + emtz, &emtzl, sizeof(emtzl));
+	}
+
+	return 0;
+
+ err:
+	wasmjit_emscripten____setErrNo(convert_errno(-rret), funcinst);
+	return -1;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
