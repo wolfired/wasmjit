@@ -355,6 +355,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->tmzone_buffer = 0;
 	ctx->LLVM_SAVEDSTACKS = NULL;
 	ctx->LLVM_SAVEDSTACKS_sz = 0;
+	ctx->tmtm_buffer = 0;
 
 	return 0;
 }
@@ -6490,6 +6491,26 @@ uint32_t wasmjit_emscripten__localtime_r(uint32_t timePtr, uint32_t tmPtr,
 					 struct FuncInst *funcinst)
 {
 	return time_exploder(&localtime_r, timePtr, tmPtr, funcinst);
+}
+
+uint32_t wasmjit_emscripten__localtime(uint32_t timePtr,
+				       struct FuncInst *funcinst)
+{
+	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
+
+	if (!ctx->tmtm_buffer) {
+		ctx->tmtm_buffer = getMemory(funcinst, sizeof(struct em_tm));
+		if (!ctx->tmtm_buffer) {
+			errno = ENOMEM;
+			goto err;
+		}
+	}
+
+	return wasmjit_emscripten__localtime_r(timePtr, ctx->tmtm_buffer, funcinst);
+
+ err:
+	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	return 0;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

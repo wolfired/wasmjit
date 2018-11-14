@@ -63,6 +63,7 @@ struct EmscriptenContext {
 	uint32_t tmzone_buffer;
 	uint32_t *LLVM_SAVEDSTACKS;
 	size_t LLVM_SAVEDSTACKS_sz;
+	uint32_t tmtm_buffer;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t
