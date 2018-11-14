@@ -267,6 +267,7 @@ extern char **environ;
 int main(int argc, char *argv[]) {
 	int ret;
 	ret = wasmjit_emscripten_init(&g_emscripten_ctx,
+				      &WASM_MODULE_SYMBOL(asm),
 				      &WASM_FUNC_SYMBOL(asm, ___errno_location),
 				      &WASM_FUNC_SYMBOL(asm, _malloc),
 				      &WASM_FUNC_SYMBOL(asm, _free),

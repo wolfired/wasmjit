@@ -293,6 +293,7 @@ static char *wasmjit_emscripten_get_base_address(struct FuncInst *funcinst) {
 }
 
 int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
+			    struct ModuleInst *asm_,
 			    struct FuncInst *errno_location_inst,
 			    struct FuncInst *malloc_inst,
 			    struct FuncInst *free_inst,
@@ -339,6 +340,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 		}
 	}
 
+	ctx->asm_ = asm_;
 	ctx->errno_location_inst = errno_location_inst;
 	ctx->malloc_inst = malloc_inst;
 	ctx->free_inst = free_inst;
@@ -351,6 +353,8 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->getgrent_buffer = 0;
 	ctx->getpwent_buffer = 0;
 	ctx->tmzone_buffer = 0;
+	ctx->LLVM_SAVEDSTACKS = NULL;
+	ctx->LLVM_SAVEDSTACKS_sz = 0;
 
 	return 0;
 }
@@ -6353,6 +6357,65 @@ uint32_t wasmjit_emscripten__kill(uint32_t pid, uint32_t sig,
 		rret = -1;
 	}
 	return (int32_t) rret;
+}
+
+static void _stackRestore(struct FuncInst *funcinst, uint32_t foo) {
+	union ValueUnion input;
+	struct FuncInst *callfuncinst;
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+
+	callfuncinst = wasmjit_get_export(ctx->asm_, "stackRestore",
+					       IMPORT_DESC_TYPE_FUNC).func;
+	if (!callfuncinst)
+		wasmjit_emscripten_internal_abort("stackRestore not available");
+
+	/* check type of function */
+	{
+		struct FuncType functype;
+		wasmjit_valtype_t input_types[] = {VALTYPE_I32};
+		wasmjit_valtype_t return_types[] = {};
+
+		_wasmjit_create_func_type(&functype,
+					  ARRAY_LEN(input_types), input_types,
+					  ARRAY_LEN(return_types), return_types);
+
+		if (!wasmjit_typecheck_func(&functype, callfuncinst))
+			wasmjit_emscripten_internal_abort("stackRestore had back functype");
+	}
+
+	input.i32 = foo;
+	if (wasmjit_invoke_function(callfuncinst, &input, NULL))
+		wasmjit_emscripten_internal_abort("failed to invoke stackRestore");
+}
+
+void wasmjit_emscripten__llvm_stackrestore(uint32_t p,
+					   struct FuncInst *funcinst)
+{
+	uint32_t foo;
+	int pred;
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+	void *newsavedstacks;
+
+	WASMJIT_CHECK_RANGE_SANITIZE(&pred, p < ctx->LLVM_SAVEDSTACKS_sz, &p);
+	if (!pred)
+		wasmjit_emscripten_internal_abort("bad stack restore index");
+
+	foo = ctx->LLVM_SAVEDSTACKS[p];
+
+	/* splice out p */
+	memmove(&ctx->LLVM_SAVEDSTACKS[p], &ctx->LLVM_SAVEDSTACKS[p + 1],
+		(ctx->LLVM_SAVEDSTACKS_sz - (p + 1)) * sizeof(ctx->LLVM_SAVEDSTACKS[p]));
+	ctx->LLVM_SAVEDSTACKS_sz -= 1;
+	newsavedstacks = realloc(ctx->LLVM_SAVEDSTACKS,
+				 ctx->LLVM_SAVEDSTACKS_sz * sizeof(ctx->LLVM_SAVEDSTACKS[p]));
+	if (!newsavedstacks)
+		wasmjit_emscripten_internal_abort("failed to realloc LLVM_SAVEDSTACKS");
+
+	ctx->LLVM_SAVEDSTACKS = newsavedstacks;
+
+	_stackRestore(funcinst, foo);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

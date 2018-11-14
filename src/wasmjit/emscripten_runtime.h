@@ -47,6 +47,7 @@ struct EmFile {
 };
 
 struct EmscriptenContext {
+	struct ModuleInst *asm_;
 	struct FuncInst *errno_location_inst;
 	char **environ;
 	int buildEnvironmentCalled;
@@ -60,6 +61,8 @@ struct EmscriptenContext {
 	uint32_t getgrent_buffer;
 	uint32_t getpwent_buffer;
 	uint32_t tmzone_buffer;
+	uint32_t *LLVM_SAVEDSTACKS;
+	size_t LLVM_SAVEDSTACKS_sz;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t
@@ -135,6 +138,7 @@ struct MemInst *wasmjit_emscripten_get_mem_inst(struct FuncInst *funcinst);
 
 
 int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
+			    struct ModuleInst *asm_,
 			    struct FuncInst *errno_location_inst,
 			    struct FuncInst *malloc_inst,
 			    struct FuncInst *free_inst,

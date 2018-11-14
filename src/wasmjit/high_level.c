@@ -362,6 +362,7 @@ int wasmjit_high_emscripten_invoke_main(struct WasmJITHigh *self,
 						       IMPORT_DESC_TYPE_FUNC).func;
 
 			if (wasmjit_emscripten_init(wasmjit_emscripten_get_context(env_module_inst),
+						    module_inst,
 						    errno_location_inst,
 						    malloc_inst,
 						    free_inst,
