@@ -6343,6 +6343,18 @@ uint32_t wasmjit_emscripten__time(uint32_t timePtr, struct FuncInst *funcinst)
 	return -1;
 }
 
+uint32_t wasmjit_emscripten__kill(uint32_t pid, uint32_t sig,
+				  struct FuncInst *funcinst)
+{
+	long rret;
+	rret = sys_kill(pid, sig);
+	if (rret < 0) {
+		wasmjit_emscripten____setErrNo(convert_errno(-rret), funcinst);
+		rret = -1;
+	}
+	return (int32_t) rret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
