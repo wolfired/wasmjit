@@ -5516,6 +5516,12 @@ struct tm *gmtime_r(const time_t *clock, struct tm *result)
 	return NULL;
 }
 
+time_t time(time_t *tmloc)
+{
+	errno = ENOSYS;
+	return (time_t) -1;
+}
+
 #endif
 
 static int check_ai_flags(int32_t ai_flags)
@@ -6307,6 +6313,34 @@ uint32_t wasmjit_emscripten__gmtime_r(uint32_t timePtr,
  err:
 	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
 	return 0;
+}
+
+uint32_t wasmjit_emscripten__time(uint32_t timePtr, struct FuncInst *funcinst)
+{
+	time_t ret;
+	em_time_t em_ret;
+
+	ret = time(NULL);
+	if (ret == (time_t) -1)
+		goto err;
+
+	if (OVERFLOWSN(ret, sizeof(em_ret))) {
+		errno = EOVERFLOW;
+		goto err;
+	}
+
+	em_ret = int32_t_swap_bytes(ret);
+	if (timePtr &&
+	    _wasmjit_emscripten_copy_to_user(funcinst, timePtr, &em_ret, sizeof(em_ret))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	return (int32_t) ret;
+
+ err:
+	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	return -1;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
