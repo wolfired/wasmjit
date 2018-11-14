@@ -350,6 +350,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->getenv_buffer = 0;
 	ctx->getgrent_buffer = 0;
 	ctx->getpwent_buffer = 0;
+	ctx->tmzone_buffer = 0;
 
 	return 0;
 }
@@ -1967,6 +1968,20 @@ struct em_statfs64 {
 	em_fsfilcnt_t f_files, f_ffree;
 	em_fsid_t f_fsid;
 	em_unsigned_long f_namelen, f_frsize, f_flags, f_spare[4];
+};
+
+struct em_tm {
+	em_int tm_sec;
+	em_int tm_min;
+	em_int tm_hour;
+	em_int tm_mday;
+	em_int tm_mon;
+	em_int tm_year;
+	em_int tm_wday;
+	em_int tm_yday;
+	em_int tm_isdst;
+	em_long tm_gmtoff;
+	uint32_t tm_zone;
 };
 
 struct linux_ucred {
@@ -3916,12 +3931,21 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 #define ISUNSIGNED(a) (((a) - (a)) - 1 > 0)
 #endif
 
-#define OVERFLOWS(a) (							\
-	sizeof(a) > 4 &&						\
+#define BINPOW(n) (1ULL << (n))
+
+#define UINT_MAX_N(n) (BINPOW((n) * 8) - 1)
+/* NB: assumes two's complement */
+#define SINT_MIN_N(n) ((long long) (0 - BINPOW((n) * 8 - 1)))
+#define SINT_MAX_N(n) ((long long) (BINPOW((n) * 8 - 1) - 1))
+
+#define OVERFLOWSN(a, n) (						\
+	sizeof(a) > n &&						\
 	(ISUNSIGNED(a)							\
-	 ? (a) > UINT32_MAX						\
-	 : ((a) < INT32_MIN || (a) > INT32_MAX))			\
+	 ? (a) > UINT_MAX_N(n)						\
+	 : ((a) < SINT_MIN_N(n) || (a) > SINT_MAX_N(n)))		\
 	 )
+
+#define OVERFLOWS(a) OVERFLOWSN((a), 4)
 
 static int32_t write_stat(char *base,
 			  uint32_t dest_addr,
@@ -5468,6 +5492,30 @@ struct passwd *getpwnam(const char *name)
 	return NULL;
 }
 
+typedef long time_t;
+
+struct tm {
+	int tm_sec;
+	int tm_min;
+	int tm_hour;
+	int tm_mday;
+	int tm_mon;
+	int tm_year;
+	int tm_wday;
+	int tm_yday;
+	int tm_isdst;
+	long tm_gmtoff;
+	char *tm_zone;
+};
+
+struct tm *gmtime_r(const time_t *clock, struct tm *result)
+{
+	(void) clock;
+	(void) result;
+	errno = ENOSYS;
+	return NULL;
+}
+
 #endif
 
 static int check_ai_flags(int32_t ai_flags)
@@ -6185,6 +6233,80 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
  err:
 	wasmjit_emscripten____setErrNo(convert_errno(-rret), funcinst);
 	return -1;
+}
+
+uint32_t wasmjit_emscripten__gmtime_r(uint32_t timePtr,
+				      uint32_t tmPtr,
+				      struct FuncInst *funcinst)
+{
+	char *base;
+	em_time_t em_time;
+	time_t time_;
+	struct tm tm_, *sys_tmPtr;
+	struct em_tm em_tm_;
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+
+	if (_wasmjit_emscripten_copy_from_user(funcinst, &em_time, timePtr, sizeof(em_time))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	if (!_wasmjit_emscripten_check_range(funcinst, tmPtr, sizeof(struct em_tm))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	time_ = em_time;
+
+	sys_tmPtr = gmtime_r(&time_, &tm_);
+	if (!sys_tmPtr) {
+		goto err;
+	}
+
+#define p(n)								\
+	if (OVERFLOWSN(tm_.tm_ ## n, sizeof(em_tm_.tm_ ## n))) {	\
+		errno = EOVERFLOW;					\
+		goto err;						\
+	}								\
+	em_tm_.tm_ ## n = int32_t_swap_bytes(tm_.tm_ ## n)
+
+	p(sec);
+	p(min);
+	p(hour);
+	p(mday);
+	p(mon);
+	p(year);
+	p(wday);
+	p(yday);
+	p(isdst);
+	p(gmtoff);
+
+#undef p
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	if (ctx->tmzone_buffer) {
+		freeMemory(ctx, ctx->tmzone_buffer);
+		ctx->tmzone_buffer = 0;
+	}
+
+	ctx->tmzone_buffer = getMemory(funcinst, strlen(tm_.tm_zone) + 1);
+	if (!ctx->tmzone_buffer) {
+		errno = ENOMEM;
+		goto err;
+	}
+
+	memcpy(base + ctx->tmzone_buffer, tm_.tm_zone, strlen(tm_.tm_zone) + 1);
+	em_tm_.tm_zone = uint32_t_swap_bytes(ctx->tmzone_buffer);
+
+	memcpy(base + tmPtr, &em_tm_, sizeof(em_tm_));
+
+	return tmPtr;
+
+ err:
+	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	return 0;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
