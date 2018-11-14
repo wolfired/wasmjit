@@ -5526,6 +5526,14 @@ time_t time(time_t *tmloc)
 	return (time_t) -1;
 }
 
+struct tm *localtime_r(const time_t *clock, struct tm *result)
+{
+	(void) clock;
+	(void) result;
+	errno = ENOSYS;
+	return NULL;
+}
+
 #endif
 
 static int check_ai_flags(int32_t ai_flags)
@@ -6245,9 +6253,10 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
 	return -1;
 }
 
-uint32_t wasmjit_emscripten__gmtime_r(uint32_t timePtr,
-				      uint32_t tmPtr,
-				      struct FuncInst *funcinst)
+static uint32_t time_exploder(struct tm *(*exploder)(const time_t *, struct tm *),
+			      uint32_t timePtr,
+			      uint32_t tmPtr,
+			      struct FuncInst *funcinst)
 {
 	char *base;
 	em_time_t em_time;
@@ -6269,7 +6278,7 @@ uint32_t wasmjit_emscripten__gmtime_r(uint32_t timePtr,
 
 	time_ = em_time;
 
-	sys_tmPtr = gmtime_r(&time_, &tm_);
+	sys_tmPtr = exploder(&time_, &tm_);
 	if (!sys_tmPtr) {
 		goto err;
 	}
@@ -6317,6 +6326,13 @@ uint32_t wasmjit_emscripten__gmtime_r(uint32_t timePtr,
  err:
 	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
 	return 0;
+}
+
+uint32_t wasmjit_emscripten__gmtime_r(uint32_t timePtr,
+				      uint32_t tmPtr,
+				      struct FuncInst *funcinst)
+{
+	return time_exploder(&gmtime_r, timePtr, tmPtr, funcinst);
 }
 
 uint32_t wasmjit_emscripten__time(uint32_t timePtr, struct FuncInst *funcinst)
@@ -6468,6 +6484,12 @@ uint32_t wasmjit_emscripten__llvm_stacksave(struct FuncInst *funcinst)
 	ctx->LLVM_SAVEDSTACKS[ctx->LLVM_SAVEDSTACKS_sz - 1] = foo;
 
 	return ctx->LLVM_SAVEDSTACKS_sz - 1;
+}
+
+uint32_t wasmjit_emscripten__localtime_r(uint32_t timePtr, uint32_t tmPtr,
+					 struct FuncInst *funcinst)
+{
+	return time_exploder(&localtime_r, timePtr, tmPtr, funcinst);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
