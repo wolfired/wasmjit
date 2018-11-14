@@ -6389,6 +6389,36 @@ static void _stackRestore(struct FuncInst *funcinst, uint32_t foo) {
 		wasmjit_emscripten_internal_abort("failed to invoke stackRestore");
 }
 
+static uint32_t _stackSave(struct FuncInst *funcinst) {
+	union ValueUnion output;
+	struct FuncInst *callfuncinst;
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+
+	callfuncinst = wasmjit_get_export(ctx->asm_, "stackSave",
+					       IMPORT_DESC_TYPE_FUNC).func;
+	if (!callfuncinst)
+		wasmjit_emscripten_internal_abort("stackSave not available");
+
+	{
+		struct FuncType functype;
+		wasmjit_valtype_t input_types[] = {};
+		wasmjit_valtype_t return_types[] = {VALTYPE_I32};
+
+		_wasmjit_create_func_type(&functype,
+					  ARRAY_LEN(input_types), input_types,
+					  ARRAY_LEN(return_types), return_types);
+
+		if (!wasmjit_typecheck_func(&functype, callfuncinst))
+			wasmjit_emscripten_internal_abort("stackSave had back functype");
+	}
+
+	if (wasmjit_invoke_function(callfuncinst, NULL, &output))
+		wasmjit_emscripten_internal_abort("failed to invoke stackSave");
+
+	return output.i32;
+}
+
 void wasmjit_emscripten__llvm_stackrestore(uint32_t p,
 					   struct FuncInst *funcinst)
 {
@@ -6416,6 +6446,28 @@ void wasmjit_emscripten__llvm_stackrestore(uint32_t p,
 	ctx->LLVM_SAVEDSTACKS = newsavedstacks;
 
 	_stackRestore(funcinst, foo);
+}
+
+uint32_t wasmjit_emscripten__llvm_stacksave(struct FuncInst *funcinst)
+{
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+	void *newsavedstacks;
+	uint32_t foo;
+
+	foo = _stackSave(funcinst);
+
+	ctx->LLVM_SAVEDSTACKS_sz += 1;
+
+	newsavedstacks = realloc(ctx->LLVM_SAVEDSTACKS,
+				 ctx->LLVM_SAVEDSTACKS_sz * sizeof(ctx->LLVM_SAVEDSTACKS[0]));
+	if (!newsavedstacks)
+		wasmjit_emscripten_internal_abort("failed to realloc LLVM_SAVEDSTACKS");
+
+	ctx->LLVM_SAVEDSTACKS = newsavedstacks;
+	ctx->LLVM_SAVEDSTACKS[ctx->LLVM_SAVEDSTACKS_sz - 1] = foo;
+
+	return ctx->LLVM_SAVEDSTACKS_sz - 1;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
