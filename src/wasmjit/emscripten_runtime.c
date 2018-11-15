@@ -5556,6 +5556,13 @@ int sem_init(sem_t *sem, int pshared, unsigned int value)
 	return -1;
 }
 
+int sem_post(sem_t *sem)
+{
+	(void) sem;
+	errno = ENOSYS;
+	return -1;
+}
+
 #elif __APPLE__
 
 int sem_init(sem_t *sem, int pshared, unsigned int value)
@@ -5564,6 +5571,14 @@ int sem_init(sem_t *sem, int pshared, unsigned int value)
 	(void) sem;
 	(void) pshared;
 	(void) value;
+	errno = ENOSYS;
+	return -1;
+}
+
+int sem_post(sem_t *sem)
+{
+	/* TODO: use dispatch/dispatch.h */
+	(void) sem;
 	errno = ENOSYS;
 	return -1;
 }
@@ -6677,6 +6692,47 @@ uint32_t wasmjit_emscripten__sem_init(uint32_t sem,
 
  err:
 	free(real_sem);
+	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	return (int32_t) -1;
+}
+
+uint32_t wasmjit_emscripten__sem_post(uint32_t sem,
+				      struct FuncInst *funcinst)
+{
+	char *base;
+	size_t idx;
+	int sem_ret, pred;
+	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
+
+	if (!_wasmjit_emscripten_check_range(funcinst, sem, sizeof(em_sem_t))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	assert(sizeof(idx) <= sizeof(em_sem_t));
+	memcpy(&idx, base + sem, sizeof(idx));
+
+	WASMJIT_CHECK_RANGE_SANITIZE(&pred, idx < ctx->sem_table.n_elts, &idx);
+	if (!pred) {
+		errno = EINVAL;
+		goto err;
+	}
+
+	if (ctx->sem_table.elts[idx].user_addr != sem) {
+		errno = EINVAL;
+		goto err;
+	}
+
+	assert(ctx->sem_table.elts[idx].real_sem);
+
+	sem_ret = sem_post(ctx->sem_table.elts[idx].real_sem);
+	if (sem_ret)
+		goto err;
+
+	return 0;
+
+ err:
 	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
 	return (int32_t) -1;
 }
