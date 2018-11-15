@@ -5540,6 +5540,12 @@ time_t mktime(struct tm *timeptr)
 	return (time_t) -1;
 }
 
+int raise(int sig)
+{
+	errno = ENOSYS;
+	return -1;
+}
+
 #endif
 
 static int check_ai_flags(int32_t ai_flags)
@@ -6559,6 +6565,17 @@ uint32_t wasmjit_emscripten__mktime(uint32_t tmPtr,
  err:
 	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
 	return 0;
+}
+
+uint32_t wasmjit_emscripten__raise(uint32_t sig,
+				   struct FuncInst *funcinst)
+{
+	int ret;
+	ret = raise(sig);
+	if (ret < 0) {
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	}
+	return (int32_t) ret;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
