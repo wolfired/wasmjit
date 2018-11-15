@@ -5535,6 +5535,11 @@ struct tm *localtime_r(const time_t *clock, struct tm *result)
 	return NULL;
 }
 
+time_t mktime(struct tm *timeptr)
+{
+	return (time_t) -1;
+}
+
 #endif
 
 static int check_ai_flags(int32_t ai_flags)
@@ -6507,6 +6512,49 @@ uint32_t wasmjit_emscripten__localtime(uint32_t timePtr,
 	}
 
 	return wasmjit_emscripten__localtime_r(timePtr, ctx->tmtm_buffer, funcinst);
+
+ err:
+	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	return 0;
+}
+
+uint32_t wasmjit_emscripten__mktime(uint32_t tmPtr,
+				    struct FuncInst *funcinst)
+{
+	struct em_tm emtm;
+	struct tm tm;
+	time_t toret;
+
+	if (_wasmjit_emscripten_copy_from_user(funcinst, &emtm, tmPtr, sizeof(emtm))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	memset(&tm, 0, sizeof(tm));
+
+#define p(n) tm.tm_ ## n = int32_t_swap_bytes(emtm.tm_ ## n)
+
+	p(sec);
+	p(min);
+	p(hour);
+	p(mday);
+	p(mon);
+	p(year);
+	p(wday);
+	p(yday);
+	p(isdst);
+	p(gmtoff);
+
+	toret = mktime(&tm);
+
+	if (OVERFLOWS(toret)) {
+		errno = EOVERFLOW;
+		goto err;
+	}
+
+	return (int32_t) toret;
+
+#undef p
 
  err:
 	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
