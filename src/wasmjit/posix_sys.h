@@ -75,6 +75,9 @@ typedef struct statfs64 user_statvfs;
 #define ST_IMMUTABLE 0x100
 #endif
 
+typedef struct {
+} sem_t;
+
 #else
 
 #include <errno.h>
@@ -95,6 +98,17 @@ typedef struct statfs64 user_statvfs;
 #include <sys/time.h>
 #include <signal.h>
 #include <pthread.h>
+
+#ifdef __APPLE__
+
+typedef struct {
+} sem_t;
+
+#else
+
+#include <semaphore.h>
+
+#endif
 
 #if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809
 #define st_get_nsec(m, st) ((st)->st_ ## m ## tim.tv_nsec)

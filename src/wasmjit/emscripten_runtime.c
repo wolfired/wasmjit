@@ -356,6 +356,7 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->LLVM_SAVEDSTACKS = NULL;
 	ctx->LLVM_SAVEDSTACKS_sz = 0;
 	ctx->tmtm_buffer = 0;
+	ctx->sem_table.n_elts = 0;
 
 	return 0;
 }
@@ -5546,6 +5547,27 @@ int raise(int sig)
 	return -1;
 }
 
+int sem_init(sem_t *sem, int pshared, unsigned int value)
+{
+	(void) sem;
+	(void) pshared;
+	(void) value;
+	errno = ENOSYS;
+	return -1;
+}
+
+#elif __APPLE__
+
+int sem_init(sem_t *sem, int pshared, unsigned int value)
+{
+	/* TODO: use dispatch/dispatch.h */
+	(void) sem;
+	(void) pshared;
+	(void) value;
+	errno = ENOSYS;
+	return -1;
+}
+
 #endif
 
 static int check_ai_flags(int32_t ai_flags)
@@ -6587,6 +6609,76 @@ uint32_t wasmjit_emscripten__sched_yield(struct FuncInst *funcinst)
 		rret = -1;
 	}
 	return (int32_t) rret;
+}
+
+typedef struct {
+	em_int __val[4*sizeof(em_long)/sizeof(em_int)];
+} em_sem_t;
+
+uint32_t wasmjit_emscripten__sem_init(uint32_t sem,
+				      uint32_t pshared,
+				      uint32_t value,
+				      struct FuncInst *funcinst)
+{
+	char *base;
+	sem_t *real_sem = NULL;
+	size_t idx;
+	int sem_ret;
+	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
+
+	/* cross-process semaphores can't be supported because we don't
+	   know where to allocate cross-process memory */
+	if (pshared) {
+		errno = ENOSYS;
+		goto err;
+	}
+
+	if (!_wasmjit_emscripten_check_range(funcinst, sem, sizeof(em_sem_t))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	/* allocate a semaphore */
+	real_sem = calloc(1, sizeof(sem_t));
+	if (!real_sem) {
+		errno = ENOSYS;
+		goto err;
+	}
+
+	sem_ret = sem_init(real_sem, 0, value);
+	if (sem_ret) {
+		goto err;
+	}
+
+	/* find a place in the sem table for the real sem */
+	for (idx = 0; idx < ctx->sem_table.n_elts; ++idx) {
+		if (!ctx->sem_table.elts[idx].real_sem) {
+			break;
+		}
+	}
+
+	if (idx == ctx->sem_table.n_elts) {
+		/* no space available, expand semaphore table */
+		if (!VECTOR_GROW(&ctx->sem_table, 1)) {
+			errno = ENOMEM;
+			goto err;
+		}
+		ctx->sem_table.n_elts += 1;
+	}
+
+	ctx->sem_table.elts[idx].user_addr = sem;
+	ctx->sem_table.elts[idx].real_sem = real_sem;
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	assert(sizeof(idx) <= sizeof(em_sem_t));
+	memcpy(base + sem, &idx, sizeof(idx));
+
+	return 0;
+
+ err:
+	free(real_sem);
+	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	return (int32_t) -1;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {

@@ -46,6 +46,11 @@ struct EmFile {
 	DIR *dirp;
 };
 
+struct EmSem {
+	uint32_t user_addr;
+	sem_t *real_sem;
+};
+
 struct EmscriptenContext {
 	struct ModuleInst *asm_;
 	struct FuncInst *errno_location_inst;
@@ -64,6 +69,7 @@ struct EmscriptenContext {
 	uint32_t *LLVM_SAVEDSTACKS;
 	size_t LLVM_SAVEDSTACKS_sz;
 	uint32_t tmtm_buffer;
+	DEFINE_ANON_VECTOR(struct EmSem) sem_table;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t
