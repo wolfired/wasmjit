@@ -6656,6 +6656,8 @@ void wasmjit_emscripten_derive_memory_globals(uint32_t static_bump,
 	} while (0)
 
 	out->memoryBase = STATIC_BASE;
+	out->__memory_base = STATIC_BASE;
+	out->__table_base = 0;
 
 	out->tempDoublePtr = STATICTOP;
 	STATICTOP += 16;

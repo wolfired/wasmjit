@@ -530,6 +530,10 @@ int main(int argc, char *argv[])
 			       tablemin, tablemax);
 		}
 
+		printf("DEFINE_WASM_GLOBAL(__memory_base, %" PRIu32 ", VALTYPE_I32, i32, 0)\n",
+		       globals.__memory_base);
+		printf("DEFINE_WASM_GLOBAL(__table_base, %" PRIu32 ", VALTYPE_I32, i32, 0)\n",
+		       globals.__table_base);
 		printf("DEFINE_WASM_GLOBAL(memoryBase, %" PRIu32 ", VALTYPE_I32, i32, 0)\n",
 		       globals.memoryBase);
 		printf("DEFINE_WASM_GLOBAL(tempDoublePtr, %" PRIu32 ", VALTYPE_I32, i32, 0)\n",

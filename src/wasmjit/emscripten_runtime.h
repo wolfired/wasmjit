@@ -154,6 +154,8 @@ int wasmjit_emscripten_invoke_main(struct MemInst *meminst,
 				   char *argv[]);
 
 struct WasmJITEmscriptenMemoryGlobals {
+	uint32_t __memory_base;
+	uint32_t __table_base;
 	uint32_t memoryBase;
 	uint32_t tempDoublePtr;
 	uint32_t DYNAMICTOP_PTR;
