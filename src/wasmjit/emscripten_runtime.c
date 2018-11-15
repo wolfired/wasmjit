@@ -6578,6 +6578,17 @@ uint32_t wasmjit_emscripten__raise(uint32_t sig,
 	return (int32_t) ret;
 }
 
+uint32_t wasmjit_emscripten__sched_yield(struct FuncInst *funcinst)
+{
+	long rret;
+	rret = sys_sched_yield();
+	if (rret < 0) {
+		wasmjit_emscripten____setErrNo(convert_errno(-rret), funcinst);
+		rret = -1;
+	}
+	return (int32_t) rret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */

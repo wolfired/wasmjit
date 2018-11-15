@@ -94,6 +94,7 @@ typedef struct statfs64 user_statvfs;
 #include <time.h>
 #include <sys/time.h>
 #include <signal.h>
+#include <pthread.h>
 
 #if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809
 #define st_get_nsec(m, st) ((st)->st_ ## m ## tim.tv_nsec)
