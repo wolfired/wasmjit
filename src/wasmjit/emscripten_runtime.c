@@ -5397,10 +5397,6 @@ struct em_addrinfo {
 };
 
 #ifdef __KERNEL__
-int errno;
-#endif
-
-#ifdef __KERNEL__
 
 #define EAI_BADFLAGS   (-1)
 #define EAI_NONAME     (-2)

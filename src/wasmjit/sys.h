@@ -44,6 +44,8 @@ extern "C" {
 
 #define OFF (sizeof(size_t) * 2)
 
+extern int errno;
+
 __attribute__((unused))
 static void *malloc(size_t size)
 {
@@ -58,8 +60,10 @@ static void *malloc(size_t size)
 	}
 
 	ret = kvmalloc(cap, GFP_KERNEL);
-	if (!ret)
+	if (!ret) {
+		errno = ENOMEM;
 		return NULL;
+	}
 	memcpy(ret, &cap, sizeof(cap));
 	memcpy(ret + sizeof(cap), &size, sizeof(size));
 	return &ret[OFF];
@@ -78,6 +82,7 @@ static void *calloc(size_t nmemb, size_t elt_size)
 	char *ret;
 	size_t size, cap;
 	if (__builtin_umull_overflow(nmemb, elt_size, &size)) {
+		errno = ENOMEM;
 		return NULL;
 	}
 
@@ -90,8 +95,10 @@ static void *calloc(size_t nmemb, size_t elt_size)
 	}
 
 	ret = kvzalloc(cap, GFP_KERNEL);
-	if (!ret)
+	if (!ret) {
+		errno = ENOMEM;
 		return NULL;
+	}
 
 	memcpy(ret, &cap, sizeof(cap));
 	memcpy(ret + sizeof(cap), &size, sizeof(size));
