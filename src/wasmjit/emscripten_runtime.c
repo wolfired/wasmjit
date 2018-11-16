@@ -6772,6 +6772,61 @@ void wasmjit_emscripten__setgrent(struct FuncInst *funcinst)
 	(void) setgrent();
 }
 
+uint32_t wasmjit_emscripten__setgroups(uint32_t ngroups,
+				       uint32_t gidset,
+				       struct FuncInst *funcinst)
+{
+	char *base;
+	uint32_t emi;
+	int32_t ret;
+	gid_t *sys_gidset = NULL;
+	long rret;
+	size_t range;
+
+	if (__builtin_mul_overflow(ngroups,
+				   sizeof(em_gid_t),
+				   &range)) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	if (!_wasmjit_emscripten_check_range_sanitize(funcinst, &gidset, range)) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	sys_gidset = calloc(ngroups, sizeof(gid_t));
+	if (!sys_gidset) {
+		goto err;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	for (emi = 0; emi < ngroups; ++emi) {
+		em_gid_t emgid;
+		memcpy(&emgid, base + gidset + emi * sizeof(em_gid_t), sizeof(emgid));
+		sys_gidset[emi] = uint32_t_swap_bytes(emgid);
+	}
+
+	rret = sys_setgroups(ngroups, sys_gidset);
+	if (rret < 0) {
+		errno = -rret;
+		goto err;
+	}
+
+	ret = 0;
+
+	if (0) {
+ err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = -1;
+	}
+
+	free(sys_gidset);
+
+	return ret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
