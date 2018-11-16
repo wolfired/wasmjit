@@ -5563,6 +5563,13 @@ int sem_post(sem_t *sem)
 	return -1;
 }
 
+int sem_wait(sem_t *sem)
+{
+	(void) sem;
+	errno = ENOSYS;
+	return -1;
+}
+
 #elif __APPLE__
 
 int sem_init(sem_t *sem, int pshared, unsigned int value)
@@ -5576,6 +5583,14 @@ int sem_init(sem_t *sem, int pshared, unsigned int value)
 }
 
 int sem_post(sem_t *sem)
+{
+	/* TODO: use dispatch/dispatch.h */
+	(void) sem;
+	errno = ENOSYS;
+	return -1;
+}
+
+int sem_wait(sem_t *sem)
 {
 	/* TODO: use dispatch/dispatch.h */
 	(void) sem;
@@ -6696,8 +6711,9 @@ uint32_t wasmjit_emscripten__sem_init(uint32_t sem,
 	return (int32_t) -1;
 }
 
-uint32_t wasmjit_emscripten__sem_post(uint32_t sem,
-				      struct FuncInst *funcinst)
+static uint32_t wasmjit_emscripten_sem_op(uint32_t sem,
+					  struct FuncInst *funcinst,
+					  int (*sem_op)(sem_t *))
 {
 	char *base;
 	size_t idx;
@@ -6726,7 +6742,7 @@ uint32_t wasmjit_emscripten__sem_post(uint32_t sem,
 
 	assert(ctx->sem_table.elts[idx].real_sem);
 
-	sem_ret = sem_post(ctx->sem_table.elts[idx].real_sem);
+	sem_ret = sem_op(ctx->sem_table.elts[idx].real_sem);
 	if (sem_ret)
 		goto err;
 
@@ -6735,6 +6751,18 @@ uint32_t wasmjit_emscripten__sem_post(uint32_t sem,
  err:
 	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
 	return (int32_t) -1;
+}
+
+uint32_t wasmjit_emscripten__sem_post(uint32_t sem,
+				      struct FuncInst *funcinst)
+{
+	return wasmjit_emscripten_sem_op(sem, funcinst, &sem_post);
+}
+
+uint32_t wasmjit_emscripten__sem_wait(uint32_t sem,
+				      struct FuncInst *funcinst)
+{
+	return wasmjit_emscripten_sem_op(sem, funcinst, &sem_wait);
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
