@@ -5570,6 +5570,11 @@ int sem_wait(sem_t *sem)
 	return -1;
 }
 
+void setgrent(void)
+{
+	return;
+}
+
 #elif __APPLE__
 
 int sem_init(sem_t *sem, int pshared, unsigned int value)
@@ -6763,6 +6768,12 @@ uint32_t wasmjit_emscripten__sem_wait(uint32_t sem,
 				      struct FuncInst *funcinst)
 {
 	return wasmjit_emscripten_sem_op(sem, funcinst, &sem_wait);
+}
+
+void wasmjit_emscripten__setgrent(struct FuncInst *funcinst)
+{
+	(void) funcinst;
+	(void) setgrent();
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
