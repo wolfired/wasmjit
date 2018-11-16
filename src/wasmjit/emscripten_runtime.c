@@ -4342,7 +4342,7 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 		if (fcntl(args.fd, F_GETFD) < 0)
 			return check_ret(-errno);
 
-		if (!VECTOR_GROW(&ctx->fd_table, args.fd + 1))
+		if (!VECTOR_GROW(&ctx->fd_table, args.fd + 1 - ctx->fd_table.n_elts))
 			return -EM_ENOMEM;
 
 		memset(&ctx->fd_table.elts[oldlen], 0, sizeof(file) * (args.fd + 1 - oldlen));
