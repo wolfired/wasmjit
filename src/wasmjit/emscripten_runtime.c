@@ -198,26 +198,6 @@ static int wasmjit_emscripten_check_range(struct MemInst *meminst,
 	return ret <= meminst->size;
 }
 
-/* use this whenever going to read from an address controlled by user input,
-   this defeats "branch check bypass" attack from spectre v1 */
-static int wasmjit_emscripten_check_range_sanitize(struct MemInst *meminst,
-						   uint32_t *user_ptr,
-						   size_t extent)
-{
-	int toret;
-	size_t ret;
-
-	if (!*user_ptr)
-		return 0;
-
-	if (__builtin_add_overflow(*user_ptr, extent, &ret))
-		return 0;
-
-	WASMJIT_CHECK_RANGE_SANITIZE(&toret, ret <= meminst->size, user_ptr);
-
-	return toret;
-}
-
 static size_t wasmjit_emscripten_copy_to_user(struct MemInst *meminst,
 					      uint32_t user_dest_ptr,
 					      void *src,
@@ -231,17 +211,50 @@ static size_t wasmjit_emscripten_copy_to_user(struct MemInst *meminst,
 	return 0;
 }
 
+static void wasmjit_memcpy_from_user(struct MemInst *restrict meminst,
+				     void *restrict dest,
+				     uint32_t user_src_ptr,
+				     size_t src_size)
+{
+	size_t i;
+	char *destc = dest;
+	for (i = 0; i < (src_size & (~(size_t) 0x7)); i += 0x8) {
+		uint32_t sptr = wasmjit_array_index_nospec(user_src_ptr + i, 0x8, meminst->size);
+		memcpy(destc + i, meminst->data + sptr, 0x8);
+	}
+
+	src_size &= 0x7;
+
+	if (src_size & 0x4) {
+		uint32_t sptr = wasmjit_array_index_nospec(user_src_ptr + i, 0x4, meminst->size);
+		memcpy(destc + i, meminst->data + sptr, 0x4);
+		i += 0x4;
+	}
+
+	if (src_size & 0x2) {
+		uint32_t sptr = wasmjit_array_index_nospec(user_src_ptr + i, 0x2, meminst->size);
+		memcpy(destc + i, meminst->data + sptr, 0x2);
+		i += 0x2;
+	}
+
+	if (src_size & 0x1) {
+		uint32_t sptr = wasmjit_array_index_nospec(user_src_ptr + i, 0x1, meminst->size);
+		memcpy(destc + i, meminst->data + sptr, 0x1);
+		i += 0x1;
+	}
+}
+
 static size_t wasmjit_emscripten_copy_from_user(struct MemInst *meminst,
 						void *dest,
 						uint32_t user_src_ptr,
 						size_t src_size)
 {
-	if (!wasmjit_emscripten_check_range_sanitize(meminst, &user_src_ptr,
-						     src_size)) {
+	if (!wasmjit_emscripten_check_range(meminst, user_src_ptr,
+					    src_size)) {
 		return src_size;
 	}
 
-	memcpy(dest, user_src_ptr + meminst->data, src_size);
+	wasmjit_memcpy_from_user(meminst, dest, user_src_ptr, src_size);
 	return 0;
 }
 
@@ -252,10 +265,9 @@ static int _wasmjit_emscripten_check_string(struct FuncInst *funcinst,
 	struct MemInst *meminst = wasmjit_emscripten_get_mem_inst(funcinst);
 	size_t len = 0;
 
-	while (wasmjit_emscripten_check_range_sanitize(meminst,
-						       &user_ptr,
-						       1) &&
+	while (user_ptr < meminst->size &&
 	       len < max) {
+		user_ptr = wasmjit_array_index_nospec(user_ptr, 1, meminst->size);
 		if (!*(meminst->data + user_ptr))
 			return 1;
 		user_ptr += 1;
@@ -271,10 +283,11 @@ static int _wasmjit_emscripten_check_string(struct FuncInst *funcinst,
 				       user_ptr,			\
 				       src_size)			\
 
-#define _wasmjit_emscripten_check_range_sanitize(funcinst, user_ptr, src_size) \
-	wasmjit_emscripten_check_range_sanitize(wasmjit_emscripten_get_mem_inst(funcinst), \
-						user_ptr,		\
-						src_size)		\
+#define _wasmjit_memcpy_from_user(funcinst, dest, user_ptr, src_size)	\
+	wasmjit_memcpy_from_user(wasmjit_emscripten_get_mem_inst((funcinst)), \
+				 (dest),				\
+				 (user_ptr),				\
+				 (src_size))
 
 #define _wasmjit_emscripten_copy_to_user(funcinst, user_dest_ptr, src, src_size) \
 	wasmjit_emscripten_copy_to_user(wasmjit_emscripten_get_mem_inst(funcinst), \
@@ -672,14 +685,13 @@ uint32_t wasmjit_emscripten____syscall140(uint32_t which, uint32_t varargs, stru
 #if !IS_LINUX
 	{
 		struct EmscriptenContext *ctx;
-		int goodfd;
 		uint32_t fds;
 
 		ctx = _wasmjit_emscripten_get_context(funcinst);
 
 		fds = args.fd;
-		WASMJIT_CHECK_RANGE_SANITIZE(&goodfd, args.fd < ctx->fd_table.n_elts, &fds);
-		if (goodfd) {
+		if (fds < ctx->fd_table.n_elts) {
+			fds = wasmjit_array_index_nospec(fds, 1, ctx->fd_table.n_elts);
 			struct EmFile *file = ctx->fd_table.elts[fds];
 			if (file) {
 				if (file->dirp) {
@@ -829,14 +841,13 @@ uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct
 #if !IS_LINUX
 	{
 		struct EmscriptenContext *ctx;
-		int goodfd;
 		uint32_t fds;
 
 		ctx = _wasmjit_emscripten_get_context(funcinst);
 
 		fds = args.fd;
-		WASMJIT_CHECK_RANGE_SANITIZE(&goodfd, args.fd < ctx->fd_table.n_elts, &fds);
-		if (goodfd) {
+		if (fds < ctx->fd_table.n_elts) {
+			fds = wasmjit_array_index_nospec(fds, 1, ctx->fd_table.n_elts);
 			struct EmFile *file = ctx->fd_table.elts[fds];
 			if (file) {
 				int closed = !!file->dirp;
@@ -870,10 +881,10 @@ uint32_t wasmjit_emscripten__emscripten_memcpy_big(uint32_t dest, uint32_t src, 
 {
 	char *base = wasmjit_emscripten_get_base_address(funcinst);
 	if (!_wasmjit_emscripten_check_range(funcinst, dest, num) ||
-	    !_wasmjit_emscripten_check_range_sanitize(funcinst, &src, num)) {
+	    !_wasmjit_emscripten_check_range(funcinst, src, num)) {
 		wasmjit_trap(WASMJIT_TRAP_MEMORY_OVERFLOW);
 	}
-	memcpy(dest + base, src + base, num);
+	_wasmjit_memcpy_from_user(funcinst, dest + base, src, num);
 	return dest;
 }
 
@@ -1343,8 +1354,9 @@ static int32_t convert_proto_to_em(int32_t domain, int proto)
 
 #ifndef SAME_SOCKADDR
 
-static long read_sockaddr(struct sockaddr_storage *ss, size_t *size,
-			  const char *addr, uint32_t len)
+static long read_sockaddr(struct FuncInst *funcinst,
+			  struct sockaddr_storage *ss, size_t *size,
+			  uint32_t addr, uint32_t len)
 {
 	uint16_t family;
 	assert(sizeof(family) == FAS);
@@ -1352,7 +1364,7 @@ static long read_sockaddr(struct sockaddr_storage *ss, size_t *size,
 	if (len < FAS)
 		return -1;
 
-	memcpy(&family, addr, FAS);
+	_wasmjit_memcpy_from_user(funcinst, &family, addr, FAS);
 	family = uint16_t_swap_bytes(family);
 
 	switch (family) {
@@ -1362,7 +1374,7 @@ static long read_sockaddr(struct sockaddr_storage *ss, size_t *size,
 			return -1;
 		memset(&sun, 0, sizeof(sun));
 		sun.sun_family = AF_UNIX;
-		memcpy(&sun.sun_path, addr + FAS, len - FAS);
+		_wasmjit_memcpy_from_user(funcinst, &sun.sun_path, addr + FAS, len - FAS);
 		*size = offsetof(struct sockaddr_un, sun_path) + (len - FAS);
 		memcpy(ss, &sun, *size);
 		break;
@@ -1375,9 +1387,9 @@ static long read_sockaddr(struct sockaddr_storage *ss, size_t *size,
 		sin.sin_family = AF_INET;
 		/* these are in network order so they don't need to be swapped */
 		assert(sizeof(sin.sin_port) == 2);
-		memcpy(&sin.sin_port, addr + FAS, 2);
+		_wasmjit_memcpy_from_user(funcinst, &sin.sin_port, addr + FAS, 2);
 		assert(sizeof(sin.sin_addr) == 4);
-		memcpy(&sin.sin_addr, addr + FAS + 2, 4);
+		_wasmjit_memcpy_from_user(funcinst, &sin.sin_addr, addr + FAS + 2, 4);
 		*size = sizeof(struct sockaddr_in);
 		memcpy(ss, &sin, *size);
 		break;
@@ -1393,18 +1405,18 @@ static long read_sockaddr(struct sockaddr_storage *ss, size_t *size,
 
 		/* this is in network order so it doesn't need to be swapped */
 		assert(sizeof(sin6.sin6_port) == 2);
-		memcpy(&sin6.sin6_port, addr + FAS, 2);
+		_wasmjit_memcpy_from_user(funcinst, &sin6.sin6_port, addr + FAS, 2);
 
 		assert(4 == sizeof(sin6.sin6_flowinfo));
-		memcpy(&sin6.sin6_flowinfo, addr + FAS + 2, 4);
+		_wasmjit_memcpy_from_user(funcinst, &sin6.sin6_flowinfo, addr + FAS + 2, 4);
 		sin6.sin6_flowinfo = uint32_t_swap_bytes(sin6.sin6_flowinfo);
 
 		/* this is in network order so it doesn't need to be swapped */
 		assert(16 == sizeof(sin6.sin6_addr));
-		memcpy(&sin6.sin6_addr, addr + FAS + 2 + 4, 16);
+		_wasmjit_memcpy_from_user(funcinst, &sin6.sin6_addr, addr + FAS + 2 + 4, 16);
 
 		assert(4 == sizeof(sin6.sin6_scope_id));
-		memcpy(&sin6.sin6_scope_id, addr + FAS + 2 + 4 + 16, 4);
+		_wasmjit_memcpy_from_user(funcinst, &sin6.sin6_scope_id, addr + FAS + 2 + 4 + 16, 4);
 		sin6.sin6_scope_id = uint32_t_swap_bytes(sin6.sin6_scope_id);
 
 		*size = sizeof(struct sockaddr_in6);
@@ -1542,15 +1554,12 @@ static long finish_bindlike(struct FuncInst *funcinst,
 {
 	struct sockaddr_storage ss;
 	size_t ptr_size;
-	char *addr;
 
-	if (!_wasmjit_emscripten_check_range_sanitize(funcinst, &uaddr,
-						      len))
+	if (!_wasmjit_emscripten_check_range(funcinst, uaddr,
+					     len))
 		return -EFAULT;
 
-	addr = wasmjit_emscripten_get_base_address(funcinst) + uaddr;
-
-	if (read_sockaddr(&ss, &ptr_size, addr, len))
+	if (read_sockaddr(funcinst, &ss, &ptr_size, uaddr, len))
 		return -EINVAL;
 
 	return bindlike(fd, (void *) &ss, ptr_size);
@@ -1811,14 +1820,12 @@ static long finish_sendto(struct FuncInst *funcinst,
 	void *saddr;
 
 	if (dest_addr) {
-		char *base;
-		if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
-							      &dest_addr,
-							      addrlen))
+		if (!_wasmjit_emscripten_check_range(funcinst,
+						     dest_addr,
+						     addrlen))
 			return -EFAULT;
-		base = wasmjit_emscripten_get_base_address(funcinst);
 		/* convert dest_addr to form understood by sys_sendto */
-		if (read_sockaddr(&ss, &ptr_size, base + dest_addr, addrlen))
+		if (read_sockaddr(funcinst, &ss, &ptr_size, dest_addr, addrlen))
 			return -EINVAL;
 		saddr = &ss;
 	} else {
@@ -2050,10 +2057,11 @@ static size_t write_timeval(char *emtv,
 	return sizeof(v);
 }
 
-static long finish_setsockopt(int32_t fd,
+static long finish_setsockopt(struct FuncInst *funcinst,
+			      int32_t fd,
 			      int32_t level,
 			      int32_t optname,
-			      char *optval,
+			      uint32_t optval,
 			      uint32_t optlen)
 {
 	int level2, optname2, opttype;
@@ -2076,7 +2084,8 @@ static long finish_setsockopt(int32_t fd,
 		int32_t wasm_int_optval;
 		if (optlen != sizeof(wasm_int_optval))
 			return -EINVAL;
-		memcpy(&wasm_int_optval, optval, sizeof(wasm_int_optval));
+		_wasmjit_memcpy_from_user(funcinst, &wasm_int_optval,
+					  optval, sizeof(wasm_int_optval));
 		wasm_int_optval = int32_t_swap_bytes(wasm_int_optval);
 		real_optval.int_ = wasm_int_optval;
 		real_optval_p = &real_optval.int_;
@@ -2087,7 +2096,8 @@ static long finish_setsockopt(int32_t fd,
 		struct em_linger wasm_linger_optval;
 		if (optlen != sizeof(struct em_linger))
 			return -EINVAL;
-		memcpy(&wasm_linger_optval, optval, sizeof(struct em_linger));
+		_wasmjit_memcpy_from_user(funcinst, &wasm_linger_optval,
+					  optval, sizeof(struct em_linger));
 		wasm_linger_optval.l_onoff =
 			int32_t_swap_bytes(wasm_linger_optval.l_onoff);
 		wasm_linger_optval.l_linger =
@@ -2102,7 +2112,8 @@ static long finish_setsockopt(int32_t fd,
 		struct em_ucred wasm_ucred_optval;
 		if (optlen != sizeof(struct em_ucred))
 			return -EINVAL;
-		memcpy(&wasm_ucred_optval, optval, sizeof(struct em_ucred));
+		_wasmjit_memcpy_from_user(funcinst, &wasm_ucred_optval,
+					  optval, sizeof(struct em_ucred));
 		real_optval.ucred.pid = uint32_t_swap_bytes(wasm_ucred_optval.pid);
 		real_optval.ucred.uid = uint32_t_swap_bytes(wasm_ucred_optval.uid);
 		real_optval.ucred.gid = uint32_t_swap_bytes(wasm_ucred_optval.gid);
@@ -2114,7 +2125,8 @@ static long finish_setsockopt(int32_t fd,
 		struct em_timeval wasm_timeval_optval;
 		if (optlen != sizeof(struct em_timeval))
 			return -EINVAL;
-		memcpy(&wasm_timeval_optval, optval, sizeof(struct em_timeval));
+		_wasmjit_memcpy_from_user(funcinst, &wasm_timeval_optval,
+					  optval, sizeof(struct em_timeval));
 		wasm_timeval_optval.tv_sec =
 			uint32_t_swap_bytes(wasm_timeval_optval.tv_sec);
 		wasm_timeval_optval.tv_usec =
@@ -2133,7 +2145,9 @@ static long finish_setsockopt(int32_t fd,
 		break;
 	}
 	case OPT_TYPE_STRING: {
-		real_optval_p = optval;
+		char *base;
+		base = wasmjit_emscripten_get_base_address(funcinst);
+		real_optval_p = base + optval;
 		assert(sizeof(real_optlen) >= sizeof(optlen));
 		real_optlen = optlen;
 		break;
@@ -2411,13 +2425,13 @@ static long copy_cmsg(struct FuncInst *funcinst,
 	while (!(controlptr > controlmax - EM_CMSG_ALIGN(sizeof(struct em_cmsghdr)))) {
 		struct em_cmsghdr user_cmsghdr;
 		size_t buf_len, new_len;
-		char *src_buf_base;
 		unsigned char *dest_buf_base;
 		uint32_t cur_len;
 
 		assert(cmsg);
 
-		memcpy(&user_cmsghdr, base + controlptr, sizeof(struct em_cmsghdr));
+		_wasmjit_memcpy_from_user(funcinst, &user_cmsghdr,
+					  controlptr, sizeof(struct em_cmsghdr));
 		user_cmsghdr.cmsg_len = uint32_t_swap_bytes(user_cmsghdr.cmsg_len);
 		user_cmsghdr.cmsg_level = uint32_t_swap_bytes(user_cmsghdr.cmsg_level);
 		user_cmsghdr.cmsg_type = uint32_t_swap_bytes(user_cmsghdr.cmsg_type);
@@ -2431,21 +2445,10 @@ static long copy_cmsg(struct FuncInst *funcinst,
 
 		cur_len += controlptr;
 
-		/* do a redundant check, to sanitize cur_len */
-		{
-			int ret;
-			ret = _wasmjit_emscripten_check_range_sanitize(funcinst,
-								       &cur_len,
-								       buf_len);
-			assert(ret);
-			(void)ret;
-		}
-
 		/* kernel sources differ from libc sources on where
 		   the buffer starts, but in any case the correct code
 		   is the aligned offset from the beginning,
 		   i.e. what (struct cmsghdr *)a + 1 means */
-		src_buf_base = base + cur_len;
 		dest_buf_base = CMSG_DATA(cmsg);
 
 		switch (user_cmsghdr.cmsg_level) {
@@ -2456,8 +2459,10 @@ static long copy_cmsg(struct FuncInst *funcinst,
 				for (i = 0; i < buf_len / sizeof(int32_t); ++i) {
 					int32_t fd;
 					int destfd;
-					memcpy(&fd, src_buf_base + i * sizeof(int32_t),
-					       sizeof(int32_t));
+					_wasmjit_memcpy_from_user(funcinst,
+								  &fd,
+								  cur_len + i * sizeof(int32_t),
+								  sizeof(int32_t));
 					fd = int32_t_swap_bytes(fd);
 					destfd = fd;
 					memcpy(dest_buf_base + i * sizeof(int),
@@ -2476,7 +2481,10 @@ static long copy_cmsg(struct FuncInst *funcinst,
 				size_t i;
 				for (i = 0; i < 3; ++i) {
 					uint32_t tmp;
-					memcpy(&tmp, src_buf_base + i * 4, sizeof(tmp));
+					_wasmjit_memcpy_from_user(funcinst,
+								  &tmp,
+								  cur_len + i * 4,
+								  sizeof(tmp));
 					tmp = uint32_t_swap_bytes(tmp);
 					memcpy(dest_buf_base + i * 4, &tmp, sizeof(tmp));
 				}
@@ -2683,19 +2691,16 @@ static long finish_sendmsg(struct FuncInst *funcinst,
 
 	/* convert msg_name to form understood by sys_sendmsg */
 	if (msg->msg_name) {
-		char *base;
 		uint32_t msg_name = (uintptr_t) msg->msg_name;
 
 		/* host kernel will take care of sanitizing msg_name */
-		if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
-							      &msg_name,
-							      msg->msg_namelen)) {
+		if (!_wasmjit_emscripten_check_range(funcinst,
+						     msg_name,
+						     msg->msg_namelen)) {
 			return -EFAULT;
 		}
 
-		base = wasmjit_emscripten_get_base_address(funcinst);
-
-		if (read_sockaddr(&ss, &ptr_size, base + msg_name, msg->msg_namelen))
+		if (read_sockaddr(funcinst, &ss, &ptr_size, msg_name, msg->msg_namelen))
 			return -EINVAL;
 		msg->msg_name = (void *)&ss;
 		msg->msg_namelen = ptr_size;
@@ -2947,8 +2952,6 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 		break;
 	}
 	case 14: { // setsockopt
-		char *base;
-
 		LOAD_ARGS(funcinst, ivargs, 5,
 			  int32_t, fd,
 			  int32_t, level,
@@ -2956,17 +2959,16 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 			  uint32_t, optval,
 			  uint32_t, optlen);
 
-		if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
-							      &args.optval,
-							      args.optlen))
+		if (!_wasmjit_emscripten_check_range(funcinst,
+						     args.optval,
+						     args.optlen))
 			return -EM_EFAULT;
 
-		base = wasmjit_emscripten_get_base_address(funcinst);
-
-		ret = finish_setsockopt(args.fd,
+		ret = finish_setsockopt(funcinst,
+					args.fd,
 					args.level,
 					args.optname,
-					base + args.optval,
+					args.optval,
 					args.optlen);
 		break;
 	}
@@ -3102,8 +3104,6 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 		base = wasmjit_emscripten_get_base_address(funcinst);
 
 		if (emmsg.msg_name) {
-			/* NB: we don't use check_range_sanitize because
-			   we write to this memory location */
 			if (!_wasmjit_emscripten_check_range(funcinst,
 							     emmsg.msg_name,
 							     emmsg.msg_namelen)) {
@@ -3126,8 +3126,6 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 
 		if (emmsg.msg_control) {
 			size_t to_malloc;
-			/* NB: we don't use check_range_sanitize because
-			   we write to this memory location */
 			if (!_wasmjit_emscripten_check_range(funcinst,
 							     emmsg.msg_control,
 							     emmsg.msg_controllen)) {
@@ -3257,8 +3255,6 @@ uint32_t wasmjit_emscripten____syscall122(uint32_t which, uint32_t varargs,
 
 	(void) which;
 
-	/* NB: we don't use check_range_sanitize because
-	   we write to this memory location */
 	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, 390))
 		return -EM_EFAULT;
 
@@ -3563,7 +3559,7 @@ uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
 				   &range))
 		return -EM_EFAULT;
 
-	if (!_wasmjit_emscripten_check_range_sanitize(funcinst, &args.fds, range))
+	if (!_wasmjit_emscripten_check_range(funcinst, args.fds, range))
 		return -EM_EFAULT;
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
@@ -3595,8 +3591,9 @@ uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
 			uint32_t i;
 			for (i = 0; i < args.nfds; ++i) {
 				struct em_pollfd epfd;
-				memcpy(&epfd, base + args.fds + i * sizeof(epfd),
-				       sizeof(epfd));
+				_wasmjit_memcpy_from_user(funcinst, &epfd,
+							  args.fds + i * sizeof(epfd),
+							  sizeof(epfd));
 				if (!check_poll_events(epfd.events)) {
 					return -EM_EINVAL;
 				}
@@ -3618,8 +3615,9 @@ uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
 		for (i = 0; i < args.nfds; ++i) {
 			struct em_pollfd epfd;
 
-			memcpy(&epfd, base + args.fds + i * sizeof(epfd),
-			       sizeof(epfd));
+			_wasmjit_memcpy_from_user(funcinst, &epfd,
+						  args.fds + i * sizeof(epfd),
+						  sizeof(epfd));
 
 			epfd.fd = uint32_t_swap_bytes(epfd.fd);
 			epfd.events = uint16_t_swap_bytes(epfd.events);
@@ -3639,9 +3637,9 @@ uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
 		for (i = 0; i < args.nfds; ++i) {
 			struct em_pollfd epfd;
 
-			memcpy(&epfd,
-			       base + args.fds + i * sizeof(epfd),
-			       sizeof(epfd));
+			_wasmjit_memcpy_from_user(funcinst, &epfd,
+						  args.fds + i * sizeof(epfd),
+						  sizeof(epfd));
 
 			/* NB: we trust the flags given by revents,
 			   e.g. we don't expect the flags to be larger
@@ -3677,10 +3675,6 @@ uint32_t wasmjit_emscripten____syscall180(uint32_t which, uint32_t varargs,
 	if (args.counthigh)
 		return -EM_EFAULT;
 
-	/* NB: we don't use check_range_sanitize because
-	   we write to this memory location,
-	   but also because sys_pread does its own spectre mitigation
-	*/
 	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, args.count))
 		return -EM_EFAULT;
 
@@ -3707,8 +3701,6 @@ uint32_t wasmjit_emscripten____syscall181(uint32_t which, uint32_t varargs,
 	if (args.counthigh)
 		return -EM_EFAULT;
 
-	/* NB: we don't use check_range_sanitize because
-	   sys_writev does its own spectre mitigation */
 	if (!_wasmjit_emscripten_check_range(funcinst, args.buf, args.count))
 		return -EM_EFAULT;
 
@@ -4314,7 +4306,6 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 	char *base;
 	struct EmscriptenContext *ctx;
 	struct EmFile *file;
-	int goodfd;
 	uint32_t fds;
 	char *dstbuf;
 	uint32_t res;
@@ -4334,8 +4325,7 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 	ctx = _wasmjit_emscripten_get_context(funcinst);
 
 	fds = args.fd;
-	WASMJIT_CHECK_RANGE_SANITIZE(&goodfd, args.fd < ctx->fd_table.n_elts, &fds);
-	if (!goodfd) {
+	if (fds >= ctx->fd_table.n_elts) {
 		size_t oldlen = ctx->fd_table.n_elts;
 
 		/* check that the descriptor is valid */
@@ -4346,8 +4336,6 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 			return -EM_ENOMEM;
 
 		memset(&ctx->fd_table.elts[oldlen], 0, sizeof(file) * (args.fd + 1 - oldlen));
-
-		fds = args.fd;
 	}
 
 	file = ctx->fd_table.elts[fds];
@@ -5796,24 +5784,21 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 
 		if (emhint.ai_addr) {
 			uint32_t ai_addr_2 = emhint.ai_addr;
-			char *uaddr;
-			if (!_wasmjit_emscripten_check_range_sanitize(funcinst,
-								      &ai_addr_2,
-								      emhint.ai_addrlen)) {
+			if (!_wasmjit_emscripten_check_range(funcinst,
+							     ai_addr_2,
+							     emhint.ai_addrlen)) {
 				ret = EAI_SYSTEM;
 				errno = EFAULT;
 				goto err;
 			}
 
-			uaddr = base + ai_addr_2;
-
 #ifdef SAME_SOCKADDR
 			hint.ai_addrlen = emhint.ai_addrlen;
-			hint.ai_addr = (struct sockaddr *)uaddr;
+			hint.ai_addr = (struct sockaddr *) (base + ai_addr_2);
 #else
 			size_t ss_size;
 
-			if (read_sockaddr(&ss, &ss_size, uaddr, emhint.ai_addrlen)) {
+			if (read_sockaddr(funcinst, &ss, &ss_size, ai_addr_2, emhint.ai_addrlen)) {
 				ret = EAI_SYSTEM;
 				errno = EFAULT;
 				goto err;
@@ -6504,15 +6489,14 @@ void wasmjit_emscripten__llvm_stackrestore(uint32_t p,
 					   struct FuncInst *funcinst)
 {
 	uint32_t foo;
-	int pred;
 	struct EmscriptenContext *ctx =
 		_wasmjit_emscripten_get_context(funcinst);
 	void *newsavedstacks;
 
-	WASMJIT_CHECK_RANGE_SANITIZE(&pred, p < ctx->LLVM_SAVEDSTACKS_sz, &p);
-	if (!pred)
+	if (p >= ctx->LLVM_SAVEDSTACKS_sz)
 		wasmjit_emscripten_internal_abort("bad stack restore index");
 
+	p = wasmjit_array_index_nospec(p, 1, ctx->LLVM_SAVEDSTACKS_sz);
 	foo = ctx->LLVM_SAVEDSTACKS[p];
 
 	/* splice out p */
@@ -6716,9 +6700,8 @@ static uint32_t wasmjit_emscripten_sem_op(uint32_t sem,
 					  struct FuncInst *funcinst,
 					  int (*sem_op)(sem_t *))
 {
-	char *base;
 	size_t idx;
-	int sem_ret, pred;
+	int sem_ret;
 	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
 
 	if (!_wasmjit_emscripten_check_range(funcinst, sem, sizeof(em_sem_t))) {
@@ -6726,15 +6709,15 @@ static uint32_t wasmjit_emscripten_sem_op(uint32_t sem,
 		goto err;
 	}
 
-	base = wasmjit_emscripten_get_base_address(funcinst);
 	assert(sizeof(idx) <= sizeof(em_sem_t));
-	memcpy(&idx, base + sem, sizeof(idx));
+	_wasmjit_memcpy_from_user(funcinst, &idx, sem, sizeof(idx));
 
-	WASMJIT_CHECK_RANGE_SANITIZE(&pred, idx < ctx->sem_table.n_elts, &idx);
-	if (!pred) {
+	if (idx >= ctx->sem_table.n_elts) {
 		errno = EINVAL;
 		goto err;
 	}
+
+	idx = wasmjit_array_index_nospec(idx, 1, ctx->sem_table.n_elts);
 
 	if (ctx->sem_table.elts[idx].user_addr != sem) {
 		errno = EINVAL;
@@ -6776,7 +6759,6 @@ uint32_t wasmjit_emscripten__setgroups(uint32_t ngroups,
 				       uint32_t gidset,
 				       struct FuncInst *funcinst)
 {
-	char *base;
 	uint32_t emi;
 	int32_t ret;
 	gid_t *sys_gidset = NULL;
@@ -6790,7 +6772,7 @@ uint32_t wasmjit_emscripten__setgroups(uint32_t ngroups,
 		goto err;
 	}
 
-	if (!_wasmjit_emscripten_check_range_sanitize(funcinst, &gidset, range)) {
+	if (!_wasmjit_emscripten_check_range(funcinst, gidset, range)) {
 		errno = EFAULT;
 		goto err;
 	}
@@ -6800,11 +6782,10 @@ uint32_t wasmjit_emscripten__setgroups(uint32_t ngroups,
 		goto err;
 	}
 
-	base = wasmjit_emscripten_get_base_address(funcinst);
-
 	for (emi = 0; emi < ngroups; ++emi) {
 		em_gid_t emgid;
-		memcpy(&emgid, base + gidset + emi * sizeof(em_gid_t), sizeof(emgid));
+		_wasmjit_memcpy_from_user(funcinst, &emgid,
+					  gidset + emi * sizeof(em_gid_t), sizeof(emgid));
 		sys_gidset[emi] = uint32_t_swap_bytes(emgid);
 	}
 
