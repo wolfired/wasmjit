@@ -2003,7 +2003,6 @@ struct linux_ucred {
 	uint32_t gid;
 };
 
-COMPILE_TIME_ASSERT(sizeof(struct timeval) == sizeof(long) * 2);
 COMPILE_TIME_ASSERT(sizeof(socklen_t) == sizeof(unsigned));
 
 #define EM_SOL_SOCKET 1
@@ -2017,6 +2016,13 @@ enum {
 	OPT_TYPE_TIMEVAL,
 	OPT_TYPE_STRING,
 };
+
+#define BINPOW(n) (1ULL << (n))
+
+#define UINT_MAX_N(n) (BINPOW((n) * 8) - 1)
+/* NB: assumes two's complement */
+#define SINT_MIN_N(n) ((long long) (0 - BINPOW((n) * 8 - 1)))
+#define SINT_MAX_N(n) ((long long) (BINPOW((n) * 8 - 1) - 1))
 
 static int convert_sockopt(int32_t level,
 			   int32_t optname,
@@ -2040,17 +2046,45 @@ static int convert_sockopt(int32_t level,
 	return 0;
 }
 
+static size_t read_timeval(struct FuncInst *funcinst,
+			   struct timeval *tv,
+			   uint32_t emtv)
+{
+	struct em_timeval wasm_timeval_optval;
+
+	_wasmjit_memcpy_from_user(funcinst, &wasm_timeval_optval,
+				  emtv, sizeof(struct em_timeval));
+	wasm_timeval_optval.tv_sec =
+		uint32_t_swap_bytes(wasm_timeval_optval.tv_sec);
+	wasm_timeval_optval.tv_usec =
+		uint32_t_swap_bytes(wasm_timeval_optval.tv_usec);
+
+	if ((4 > sizeof(tv->tv_sec) &&
+	     (wasm_timeval_optval.tv_sec > SINT_MAX_N(sizeof(tv->tv_sec)) ||
+	      wasm_timeval_optval.tv_sec < SINT_MIN_N(sizeof(tv->tv_sec)))) ||
+	    (4 > sizeof(tv->tv_usec) &&
+	     (wasm_timeval_optval.tv_usec > SINT_MAX_N(sizeof(tv->tv_usec)) ||
+	      wasm_timeval_optval.tv_usec < SINT_MIN_N(sizeof(tv->tv_usec)))))
+		return 0;
+
+	tv->tv_sec = wasm_timeval_optval.tv_sec;
+	tv->tv_usec = wasm_timeval_optval.tv_usec;
+	return sizeof(wasm_timeval_optval);
+}
+
 static size_t write_timeval(char *emtv,
-			    struct timeval *tv)
+			    const struct timeval *tv)
 {
 	struct em_timeval v;
-#if __LONG_WIDTH__ > 32
-	if (tv->tv_sec > INT32_MAX ||
-	    tv->tv_sec < INT32_MIN ||
-	    tv->tv_usec > INT32_MAX ||
-	    tv->tv_usec < INT32_MIN)
+
+	if ((sizeof(tv->tv_sec) > 4 &&
+	     (tv->tv_sec > INT32_MAX ||
+	      tv->tv_sec < INT32_MIN)) ||
+	    (sizeof(tv->tv_usec) > 4 &&
+	     (tv->tv_usec > INT32_MAX ||
+	      tv->tv_usec < INT32_MIN)))
 		return 0;
-#endif
+
 	v.tv_sec = int32_t_swap_bytes(tv->tv_sec);
 	v.tv_usec = int32_t_swap_bytes(tv->tv_usec);
 	memcpy(emtv, &v, sizeof(v));
@@ -2122,24 +2156,10 @@ static long finish_setsockopt(struct FuncInst *funcinst,
 		break;
 	}
 	case OPT_TYPE_TIMEVAL: {
-		struct em_timeval wasm_timeval_optval;
 		if (optlen != sizeof(struct em_timeval))
 			return -EINVAL;
-		_wasmjit_memcpy_from_user(funcinst, &wasm_timeval_optval,
-					  optval, sizeof(struct em_timeval));
-		wasm_timeval_optval.tv_sec =
-			uint32_t_swap_bytes(wasm_timeval_optval.tv_sec);
-		wasm_timeval_optval.tv_usec =
-			uint32_t_swap_bytes(wasm_timeval_optval.tv_usec);
-#if 32 > __LONG_WIDTH__
-		if (wasm_timeval_optval.tv_sec > LONG_MAX ||
-		    wasm_timeval_optval.tv_sec < LONG_MIN ||
-		    wasm_timeval_optval.tv_usec > LONG_MAX ||
-		    wasm_timeval_optval.tv_usec < LONG_MIN)
+		if (!read_timeval(funcinst, &real_optval.timeval, optval))
 			return -EINVAL;
-#endif
-		real_optval.timeval.tv_sec = wasm_timeval_optval.tv_sec;
-		real_optval.timeval.tv_usec = wasm_timeval_optval.tv_usec;
 		real_optval_p = &real_optval.timeval;
 		real_optlen = sizeof(real_optval.timeval);
 		break;
@@ -3928,13 +3948,6 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 #else
 #define ISUNSIGNED(a) (((a) - (a)) - 1 > 0)
 #endif
-
-#define BINPOW(n) (1ULL << (n))
-
-#define UINT_MAX_N(n) (BINPOW((n) * 8) - 1)
-/* NB: assumes two's complement */
-#define SINT_MIN_N(n) ((long long) (0 - BINPOW((n) * 8 - 1)))
-#define SINT_MAX_N(n) ((long long) (BINPOW((n) * 8 - 1) - 1))
 
 #define OVERFLOWSN(a, n) (						\
 	sizeof(a) > n &&						\
