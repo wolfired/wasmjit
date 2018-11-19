@@ -1997,6 +1997,11 @@ struct em_tm {
 	uint32_t tm_zone;
 };
 
+struct em_itimerval {
+	struct em_timeval it_interval;
+	struct em_timeval it_value;
+};
+
 struct linux_ucred {
 	uint32_t pid;
 	uint32_t uid;
@@ -6819,6 +6824,99 @@ uint32_t wasmjit_emscripten__setgroups(uint32_t ngroups,
 	free(sys_gidset);
 
 	return ret;
+}
+
+#define EM_ITIMER_REAL      0
+#define EM_ITIMER_VIRTUAL   1
+#define EM_ITIMER_PROF      2
+
+uint32_t wasmjit_emscripten__setitimer(uint32_t which,
+				       uint32_t new_value,
+				       uint32_t old_value,
+				       struct FuncInst *funcinst)
+{
+	char *base;
+	int sys_which;
+	long rret;
+	struct itimerval sys_new_value_v, sys_old_value_v;
+	void *sys_new_value, *sys_old_value;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, new_value, sizeof(struct em_itimerval)) ||
+	    (old_value &&
+	     !_wasmjit_emscripten_check_range(funcinst, old_value, sizeof(struct em_itimerval)))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	if (EM_ITIMER_REAL == ITIMER_REAL &&
+	    EM_ITIMER_VIRTUAL == ITIMER_VIRTUAL &&
+	    EM_ITIMER_PROF == ITIMER_PROF) {
+#if !IS_LINUX
+		if (which != EM_ITIMER_REAL &&
+		    which != EM_ITIMER_VIRTUAL &&
+		    which != EM_ITIMER_PROF) {
+			errno = EINVAL;
+			goto err;
+		}
+#endif
+		sys_which = which;
+	} else {
+		switch (which) {
+		case EM_ITIMER_REAL: sys_which = ITIMER_REAL; break;
+		case EM_ITIMER_VIRTUAL: sys_which = ITIMER_VIRTUAL; break;
+		case EM_ITIMER_PROF: sys_which = ITIMER_PROF; break;
+		default: {
+			errno = EINVAL;
+			goto err;
+		}
+		}
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+#define PASSTHROUGH (							\
+		     __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ &&	\
+		     sizeof(struct itimerval) == sizeof(struct em_itimerval) && \
+		     sizeof(struct timeval) == sizeof(struct em_timeval) && \
+		     offsetof(struct timeval, tv_sec) == offsetof(struct em_timeval, tv_sec) && \
+		     offsetof(struct timeval, tv_usec) == offsetof(struct em_timeval, tv_usec) && \
+		     1							\
+									)
+	if (PASSTHROUGH) {
+		sys_new_value = base + new_value;
+		sys_old_value = old_value ? base + old_value : NULL;
+	} else {
+		if (!read_timeval(funcinst, &sys_new_value_v.it_interval,
+				  new_value + offsetof(struct em_itimerval, it_interval)) ||
+		    !read_timeval(funcinst, &sys_new_value_v.it_value,
+				  new_value + offsetof(struct em_itimerval, it_value))) {
+			errno = EINVAL;
+			goto err;
+		}
+		sys_new_value = &sys_new_value_v;
+		sys_old_value = old_value ? &sys_old_value_v : NULL;
+	}
+
+	rret = sys_setitimer(sys_which, sys_new_value, sys_old_value);
+	if (rret < 0) {
+		errno = -rret;
+		goto err;
+	}
+
+	if (sys_old_value && !PASSTHROUGH) {
+		if (!write_timeval(base + old_value + offsetof(struct em_itimerval, it_interval),
+				   &sys_old_value_v.it_interval) ||
+		    !write_timeval(base + old_value + offsetof(struct em_itimerval, it_value),
+				   &sys_old_value_v.it_value)) {
+			wasmjit_emscripten_internal_abort("setitimer ovalue overflow!");
+		}
+	}
+
+	return 0;
+
+ err:
+	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	return (int32_t) -1;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
