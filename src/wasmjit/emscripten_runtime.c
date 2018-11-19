@@ -109,7 +109,7 @@ enum {
 #endif
 
 __attribute__((unused))
-static int32_t convert_errno(long errno_)
+static int32_t _convert_errno(long errno_)
 {
 	static int32_t to_sys_errno[] = {
 #define ERRNO(name, value) [name] = -value,
@@ -129,6 +129,8 @@ static int32_t convert_errno(long errno_)
 
 	return toret;
 }
+
+#define convert_errno(x) (-_convert_errno((x)))
 
 /* error codes are the same for these targets */
 /* issigned == 0 implies no error */
@@ -179,7 +181,7 @@ static int32_t check_ret_signed(long errno_, int issigned)
 
 	errno_ = -errno_;
 
-	return convert_errno(errno_);
+	return _convert_errno(errno_);
 }
 
 #endif
