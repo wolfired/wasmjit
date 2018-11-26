@@ -199,6 +199,10 @@ typedef struct __jmp_buf_tag {
 int setjmp(jmp_buf);
 void longjmp(jmp_buf, int) __attribute__((noreturn));
 
+typedef jmp_buf wasmjit_thread_state;
+#define wasmjit_save_thread_state(s) setjmp((s))
+#define wasmjit_restore_thread_state(s, d) longjmp((s), (d))
+
 #define getpagesize() PAGE_SIZE
 
 #ifdef __cplusplus
@@ -220,6 +224,10 @@ void longjmp(jmp_buf, int) __attribute__((noreturn));
 #include <limits.h>
 #include <grp.h>
 #include <pwd.h>
+
+typedef sigjmp_buf wasmjit_thread_state;
+#define wasmjit_save_thread_state(s) sigsetjmp((s), 1)
+#define wasmjit_restore_thread_state(s, d) siglongjmp((s), (d))
 
 #endif
 

@@ -209,8 +209,8 @@ int wasmjit_mark_code_segment_executable(void *code, size_t code_size);
 int wasmjit_unmap_code_segment(void *code, size_t code_size);
 
 int wasmjit_set_stack_top(void *stack_top);
-int wasmjit_set_jmp_buf(jmp_buf *jmpbuf);
-jmp_buf *wasmjit_get_jmp_buf(void);
+int wasmjit_set_jmp_buf(wasmjit_thread_state *jmpbuf);
+wasmjit_thread_state *wasmjit_get_jmp_buf(void);
 
 union ExportPtr wasmjit_get_export(const struct ModuleInst *, const char *name, wasmjit_desc_t type);
 

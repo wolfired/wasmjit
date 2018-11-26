@@ -36,7 +36,7 @@ extern "C" {
 #endif
 
 struct KernelThreadLocal {
-	jmp_buf *jmp_buf;
+	wasmjit_thread_state *jmp_buf;
 	void *stack_top;
 	struct pt_regs regs;
 	struct MemInst *mem_inst;

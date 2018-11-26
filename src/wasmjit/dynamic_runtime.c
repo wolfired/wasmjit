@@ -55,12 +55,12 @@ int wasmjit_unmap_code_segment(void *code, size_t code_size)
 	return 1;
 }
 
-jmp_buf *wasmjit_get_jmp_buf(void)
+wasmjit_thread_state *wasmjit_get_jmp_buf(void)
 {
 	return wasmjit_get_ktls()->jmp_buf;
 }
 
-int wasmjit_set_jmp_buf(jmp_buf *jmpbuf)
+int wasmjit_set_jmp_buf(wasmjit_thread_state *jmpbuf)
 {
 	wasmjit_get_ktls()->jmp_buf = jmpbuf;
 	return 1;
@@ -112,16 +112,16 @@ static void _init_jmp_buf(void)
 	wasmjit_init_tls_key(&jmp_buf_key, NULL);
 }
 
-jmp_buf *wasmjit_get_jmp_buf(void)
+wasmjit_thread_state *wasmjit_get_jmp_buf(void)
 {
-	jmp_buf *toret;
+	wasmjit_thread_state *toret;
 	int ret;
 	ret = wasmjit_get_tls_key(jmp_buf_key, &toret);
 	if (!ret) return NULL;
 	return toret;
 }
 
-int wasmjit_set_jmp_buf(jmp_buf *jmpbuf)
+int wasmjit_set_jmp_buf(wasmjit_thread_state *jmpbuf)
 {
 	return wasmjit_set_tls_key(jmp_buf_key, jmpbuf);
 }
@@ -154,14 +154,14 @@ __attribute__((noreturn))
 void wasmjit_trap(int reason)
 {
 	assert(reason);
-	longjmp(*wasmjit_get_jmp_buf(), (reason << 8));
+	wasmjit_restore_thread_state(*wasmjit_get_jmp_buf(), (reason << 8));
 }
 
 __attribute__((noreturn))
 void wasmjit_exit(int status)
 {
 	assert(status);
-	longjmp(*wasmjit_get_jmp_buf(), (WASMJIT_TRAP_EXIT << 8) | status);
+	wasmjit_restore_thread_state(*wasmjit_get_jmp_buf(), (WASMJIT_TRAP_EXIT << 8) | status);
 }
 
 int wasmjit_invoke_function(struct FuncInst *funcinst,
@@ -170,7 +170,7 @@ int wasmjit_invoke_function(struct FuncInst *funcinst,
 {
 	union ValueUnion lout;
 	int ret;
-	jmp_buf jmpbuf;
+	wasmjit_thread_state jmpbuf;
 
 	if (wasmjit_get_jmp_buf()) {
 		lout = wasmjit_invoke_function_raw(funcinst, values);
@@ -179,7 +179,7 @@ int wasmjit_invoke_function(struct FuncInst *funcinst,
 		ret = 0;
 	} else {
 		wasmjit_set_jmp_buf(&jmpbuf);
-		if (!(ret = setjmp(jmpbuf))) {
+		if (!(ret = wasmjit_save_thread_state(jmpbuf))) {
 			lout = wasmjit_invoke_function_raw(funcinst, values);
 			if (out)
 				*out = lout;
