@@ -136,7 +136,7 @@ static void _init_stack_top(void)
 
 void *wasmjit_stack_top(void)
 {
-	jmp_buf *toret;
+	void *toret;
 	int ret;
 	ret = wasmjit_get_tls_key(stack_top_key, &toret);
 	if (!ret) return NULL;
