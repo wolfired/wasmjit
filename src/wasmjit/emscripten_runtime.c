@@ -6689,7 +6689,6 @@ uint32_t wasmjit_emscripten__sem_init(uint32_t sem,
 			errno = ENOMEM;
 			goto err;
 		}
-		ctx->sem_table.n_elts += 1;
 	}
 
 	ctx->sem_table.elts[idx].user_addr = sem;
