@@ -7770,6 +7770,16 @@ uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
 
 #endif
 
+uint32_t wasmjit_emscripten____syscall29(uint32_t which,
+					 uint32_t varargs,
+					 struct FuncInst *funcinst)
+{
+	(void) which;
+	(void) varargs;
+	(void) funcinst;
+	return check_ret(sys_pause());
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
