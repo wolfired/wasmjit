@@ -5440,7 +5440,7 @@ __attribute__((noreturn))
 void wasmjit_emscripten__abort(struct FuncInst *funcinst)
 {
 	(void) funcinst;
-	wasmjit_emscripten_internal_abort("_abort()");
+	wasmjit_trap(WASMJIT_TRAP_ABORT);
 }
 
 __attribute__ ((unused))
