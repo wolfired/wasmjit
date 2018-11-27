@@ -362,7 +362,6 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->environ = envp;
 	ctx->buildEnvironmentCalled = 0;
 	ctx->fd_table.n_elts = 0;
-	ctx->grp_file = NULL;
 	ctx->gai_strerror_buffer = 0;
 	ctx->getenv_buffer = 0;
 	ctx->getgrent_buffer = 0;
@@ -5131,27 +5130,6 @@ void wasmjit_emscripten__abort(struct FuncInst *funcinst)
 	wasmjit_emscripten_internal_abort("_abort()");
 }
 
-int32_t em_fclose(struct EmFILE *stream)
-{
-	(void) stream;
-	return 0;
-}
-
-void wasmjit_emscripten__endgrent(struct FuncInst *funcinst)
-{
-#ifdef __KERNEL__
-	/* NB: Kernel doesn't have endgrent, it's a higher level thing
-	   so we have to re-implement it in kernel space. In the future
-	   we have to move this functionality into the module */
-	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
-	if (ctx->grp_file) em_fclose(ctx->grp_file);
-	ctx->grp_file = NULL;
-#else
-	(void) funcinst;
-	endgrent();
-#endif
-}
-
 __attribute__ ((unused))
 static int copy_string_array(struct FuncInst *funcinst,
 			     uint32_t string_array,
@@ -5465,6 +5443,13 @@ char *getenv(const char *name)
 {
 	(void) name;
 	return NULL;
+}
+
+void endgrent(void)
+{
+	/* NB: Kernel doesn't have endgrent, it's a higher level thing
+	   so we have to re-implement it in kernel space. In the future
+	   we have to move this functionality into the module */
 }
 
 struct group {
@@ -6032,6 +6017,12 @@ uint32_t wasmjit_emscripten__getenv(uint32_t name,
 	}
 
 	return ret;
+}
+
+void wasmjit_emscripten__endgrent(struct FuncInst *funcinst)
+{
+	(void) funcinst;
+	endgrent();
 }
 
 struct em_group {

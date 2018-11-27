@@ -60,7 +60,6 @@ struct EmscriptenContext {
 	struct FuncInst *free_inst;
 	DEFINE_ANON_VECTOR(struct EmFile *) fd_table;
 	/* NB: only used in kernel */
-	struct EmFILE *grp_file;
 	uint32_t gai_strerror_buffer;
 	uint32_t getenv_buffer;
 	uint32_t getgrent_buffer;
