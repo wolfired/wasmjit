@@ -39,6 +39,25 @@ enum {
 	WASMJIT_EMSCRIPTEN_TOTAL_MEMORY = 16777216,
 };
 
+typedef uint32_t em_funcptr;
+typedef int32_t em_int;
+typedef uint32_t em_ulong;
+typedef int32_t em_long;
+
+typedef struct { em_ulong __bits[128 / sizeof(em_long)]; } em_sigset_t;
+
+union em_sigaction_handler {
+	em_funcptr em_sa_handler;
+	em_funcptr em_sa_sigaction;
+};
+
+struct em_sigaction {
+        union em_sigaction_handler __sa_handler;
+        em_sigset_t sa_mask;
+        em_int sa_flags;
+        em_funcptr sa_restorer;
+};
+
 struct EmFILE {
 };
 
@@ -69,6 +88,11 @@ struct EmscriptenContext {
 	size_t LLVM_SAVEDSTACKS_sz;
 	uint32_t tmtm_buffer;
 	DEFINE_ANON_VECTOR(struct EmSem) sem_table;
+	struct {
+		int is_sigaction;
+		union em_sigaction_handler handler;
+	} sig_handlers[sizeof(em_sigset_t) * CHAR_BIT];
+	DEFINE_ANON_VECTOR(void *) unfreed_pointers;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t

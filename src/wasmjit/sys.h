@@ -205,6 +205,11 @@ typedef jmp_buf wasmjit_thread_state;
 
 #define getpagesize() PAGE_SIZE
 
+/* Kernel doesn't define this */
+#define CHAR_BIT 8
+
+typedef int sig_atomic_t;
+
 #ifdef __cplusplus
 }
 #endif

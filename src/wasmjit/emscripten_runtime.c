@@ -307,6 +307,134 @@ static char *wasmjit_emscripten_get_base_address(struct FuncInst *funcinst) {
 	return wasmjit_emscripten_get_mem_inst(funcinst)->data;
 }
 
+/* shortcut function */
+static struct EmscriptenContext *_wasmjit_emscripten_get_context(struct FuncInst *funcinst)
+{
+	return wasmjit_emscripten_get_context(funcinst->module_inst);
+}
+
+static struct EmscriptenContext *_g_handler_ctx;
+static sig_atomic_t _g_handler_setting;
+
+static void compiler_barrier(void) {
+	asm volatile ("" : : : "memory");
+}
+
+static void set_signal_context(struct EmscriptenContext *ctx)
+{
+	_g_handler_setting = 1;
+	compiler_barrier();
+	/* There should only be one instance of emscripten module per process,
+	   there is no isolation between modules, only process-level isolation
+	 */
+	assert(_g_handler_ctx == NULL);
+	_g_handler_ctx = ctx;
+	compiler_barrier();
+	_g_handler_setting = 0;
+}
+
+static void remove_signal_context(void)
+{
+	_g_handler_setting = 1;
+	compiler_barrier();
+	_g_handler_ctx = NULL;
+	compiler_barrier();
+	_g_handler_setting = 0;
+}
+
+#ifdef __KERNEL__
+
+typedef int wasmjit_signal_block_ctx;
+
+static void _wasmjit_block_signals(wasmjit_signal_block_ctx *set)
+{
+	(void) set;
+}
+
+static void _wasmjit_unblock_signals(const wasmjit_signal_block_ctx *set)
+{
+	(void) set;
+}
+
+static size_t _wasmjit_add_unfreed_pointer(struct FuncInst *funcinst, void *ptr)
+{
+	(void) funcinst;
+	(void) ptr;
+	return 0;
+}
+
+static void _wasmjit_remove_unfreed_pointer(struct FuncInst *funcinst, size_t ptr)
+{
+	(void) funcinst;
+	(void) ptr;
+}
+
+#else
+
+typedef sigset_t wasmjit_signal_block_ctx;
+
+/* We must block signals when calling non-async safe functions
+   because we may siglongjmp during signal handlers, and we can't
+   leave those functions in incomplete states */
+static void _wasmjit_block_signals(wasmjit_signal_block_ctx *set)
+{
+	int ret;
+	sigset_t new;
+	sigfillset(&new);
+	ret = sigprocmask(SIG_SETMASK, &new, set);
+	if (ret < 0) {
+		/* this can't fail */
+		abort();
+	}
+}
+
+static void _wasmjit_unblock_signals(const wasmjit_signal_block_ctx *set)
+{
+	int ret;
+	ret = sigprocmask(SIG_SETMASK, set, NULL);
+	if (ret < 0) {
+		/* this can't fail */
+		abort();
+	}
+}
+
+static size_t _wasmjit_add_unfreed_pointer(struct FuncInst *funcinst, void *ptr)
+{
+	size_t i;
+	struct EmscriptenContext *ctx;
+
+	assert(ptr);
+
+	ctx = _wasmjit_emscripten_get_context(funcinst);
+	for (i = 0; i < ctx->unfreed_pointers.n_elts; ++i) {
+		if (!ctx->unfreed_pointers.elts[i]) {
+			ctx->unfreed_pointers.elts[i] = ptr;
+			return i + 1;
+		}
+	}
+
+	if (ctx->unfreed_pointers.n_elts == SIZE_MAX - 1)
+		return 0;
+
+	/* all pointers are taken, grow vector */
+	if (!VECTOR_GROW(&ctx->unfreed_pointers, 1))
+		return 0;
+
+	ctx->unfreed_pointers.elts[ctx->unfreed_pointers.n_elts - 1] = ptr;
+
+	return ctx->unfreed_pointers.n_elts;
+}
+
+static void _wasmjit_remove_unfreed_pointer(struct FuncInst *funcinst, size_t idx)
+{
+	struct EmscriptenContext *ctx;
+	if (!idx) return;
+	ctx = _wasmjit_emscripten_get_context(funcinst);
+	ctx->unfreed_pointers.elts[idx - 1] = NULL;
+}
+
+#endif
+
 int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 			    struct ModuleInst *asm_,
 			    struct FuncInst *errno_location_inst,
@@ -371,6 +499,12 @@ int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
 	ctx->LLVM_SAVEDSTACKS_sz = 0;
 	ctx->tmtm_buffer = 0;
 	ctx->sem_table.n_elts = 0;
+	ctx->unfreed_pointers.n_elts = 0;
+
+	/* EM_SIG_DFL == 0 */
+	memset(ctx->sig_handlers, 0, sizeof(ctx->sig_handlers));
+
+	set_signal_context(ctx);
 
 	return 0;
 }
@@ -474,12 +608,6 @@ int wasmjit_emscripten_invoke_main(struct MemInst *meminst,
 	}
 
 	return 0xff & out.i32;
-}
-
-/* shortcut function */
-static struct EmscriptenContext *_wasmjit_emscripten_get_context(struct FuncInst *funcinst)
-{
-	return wasmjit_emscripten_get_context(funcinst->module_inst);
 }
 
 void wasmjit_emscripten_abortStackOverflow(uint32_t allocSize, struct FuncInst *funcinst)
@@ -687,6 +815,10 @@ uint32_t wasmjit_emscripten____syscall140(uint32_t which, uint32_t varargs, stru
 	{
 		struct EmscriptenContext *ctx;
 		uint32_t fds;
+		int complete = 0;
+		wasmjit_signal_block_ctx set;
+
+		_wasmjit_block_signals(&set);
 
 		ctx = _wasmjit_emscripten_get_context(funcinst);
 
@@ -697,10 +829,15 @@ uint32_t wasmjit_emscripten____syscall140(uint32_t which, uint32_t varargs, stru
 			if (file) {
 				if (file->dirp) {
 					seekdir(file->dirp, off);
-					return 0;
+					complete = 1;
 				}
 			}
 		}
+
+		_wasmjit_unblock_signals(&set);
+
+		if (complete)
+			return 0;
 	}
 #endif
 
@@ -779,7 +916,9 @@ static long copy_iov(struct FuncInst *funcinst,
 uint32_t wasmjit_emscripten____syscall146(uint32_t which, uint32_t varargs, struct FuncInst *funcinst)
 {
 	long rret;
-	struct iovec *liov;
+	struct iovec *liov = NULL;
+	wasmjit_signal_block_ctx set;
+	size_t ptr_idx_1 = 0;
 
 	LOAD_ARGS(funcinst, varargs, 3,
 		  int32_t, fd,
@@ -788,15 +927,36 @@ uint32_t wasmjit_emscripten____syscall146(uint32_t which, uint32_t varargs, stru
 
 	(void)which;
 
+	_wasmjit_block_signals(&set);
+
 	rret = copy_iov(funcinst, args.iov, args.iovcnt, &liov);
 	if (rret)
 		goto error;
 
+	ptr_idx_1 = _wasmjit_add_unfreed_pointer(funcinst, liov);
+	if (!ptr_idx_1) {
+		rret = -ENOMEM;
+		goto error;
+	}
+
+	_wasmjit_unblock_signals(&set);
+
+	/* writev is not documented to be async-signal-safe anywhere
+	   but since it can arbitrarily block and it's most likely async-signal-safe
+	   it's better to not block signals while calling it, otherwise we may make the
+	   process annoyingly resistant to signals (like SIGINT, i.e. Ctrl-C)
+	   TODO: disable functionality on systems where it's not async-signal-safe
+	*/
 	rret = sys_writev(args.fd, liov, args.iovcnt);
 
-	free(liov);
+	_wasmjit_block_signals(&set);
 
  error:
+	_wasmjit_remove_unfreed_pointer(funcinst, ptr_idx_1);
+	free(liov);
+
+	_wasmjit_unblock_signals(&set);
+
 	return check_ret(rret);
 }
 
@@ -833,11 +993,16 @@ uint32_t wasmjit_emscripten____syscall54(uint32_t which, uint32_t varargs, struc
 /* close */
 uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct FuncInst *funcinst)
 {
+	wasmjit_signal_block_ctx set;
+	long closedret;
+
 	/* TODO: need to define non-no filesystem case */
 	LOAD_ARGS(funcinst, varargs, 1,
 		  uint32_t, fd);
 
 	(void)which;
+
+	_wasmjit_block_signals(&set);
 
 #if !IS_LINUX
 	{
@@ -852,7 +1017,6 @@ uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct
 			struct EmFile *file = ctx->fd_table.elts[fds];
 			if (file) {
 				int closed = !!file->dirp;
-				int closedret;
 				if (file->dirp) {
 					if (closedir(file->dirp) < 0) {
 						closedret = -errno;
@@ -863,13 +1027,18 @@ uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct
 				free(file);
 				ctx->fd_table.elts[fds] = NULL;
 				if (closed)
-					return check_ret(closedret);
+					goto out;
 			}
 		}
 	}
 #endif
 
-	return check_ret(sys_close(args.fd));
+	closedret = sys_close(args.fd);
+
+ out:
+	_wasmjit_unblock_signals(&set);
+
+	return check_ret(closedret);
 }
 
 void wasmjit_emscripten____unlock(uint32_t x, struct FuncInst *funcinst)
@@ -947,6 +1116,9 @@ void wasmjit_emscripten____buildEnvironment(uint32_t environ_arg,
 	size_t i;
 	char **env;
 	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
+	wasmjit_signal_block_ctx set;
+
+	_wasmjit_block_signals(&set);
 
 	if (ctx->buildEnvironmentCalled) {
 		/* free old stuff */
@@ -1012,6 +1184,8 @@ void wasmjit_emscripten____buildEnvironment(uint32_t environ_arg,
 	       0, sizeof(poolPtr));
 
 	ctx->buildEnvironmentCalled = 1;
+
+	_wasmjit_unblock_signals(&set);
 }
 
 uint32_t wasmjit_emscripten____syscall10(uint32_t which, uint32_t varargs,
@@ -1921,8 +2095,6 @@ struct em_rlimit {
 };
 
 typedef uint32_t em_dev_t;
-typedef int32_t em_int;
-typedef int32_t em_long;
 typedef uint32_t em_mode_t;
 typedef uint32_t em_nlink_t;
 typedef uint32_t em_uid_t;
@@ -2788,6 +2960,8 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 {
 	long ret;
 	uint32_t ivargs, icall;
+	wasmjit_signal_block_ctx set;
+
 	LOAD_ARGS(funcinst, varargs, 2,
 		  uint32_t, call,
 		  uint32_t, varargs);
@@ -3043,6 +3217,7 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 
 		{
 			user_msghdr_t msg;
+			size_t ptr_idx_1 = 0, ptr_idx_2 = 0;
 
 			LOAD_ARGS_CUSTOM(emmsg, funcinst, args.msg, 7,
 					 uint32_t, name,
@@ -3064,17 +3239,31 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 
 			msg.msg_namelen = emmsg.namelen;
 
+			_wasmjit_block_signals(&set);
+
 			ret = copy_iov(funcinst, emmsg.iov, emmsg.iovlen, &msg.msg_iov);
 			if (ret) {
 				goto error;
 			}
 			msg.msg_iovlen = emmsg.iovlen;
 
+			ptr_idx_2 = _wasmjit_add_unfreed_pointer(funcinst, msg.msg_iov);
+			if (!ptr_idx_2) {
+				ret = -ENOMEM;
+				goto error;
+			}
+
 			if (emmsg.control) {
 				ret = copy_cmsg(funcinst, emmsg.control, emmsg.controllen,
 						&msg);
 				if (ret)
 					goto error;
+
+				ptr_idx_1 = _wasmjit_add_unfreed_pointer(funcinst, msg.msg_control);
+				if (!ptr_idx_1) {
+					ret = -ENOMEM;
+					goto error;
+				}
 			} else {
 				if (emmsg.controllen) {
 					ret = -EINVAL;
@@ -3084,15 +3273,24 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 				msg.msg_controllen = 0;
 			}
 
+			_wasmjit_unblock_signals(&set);
+
 			/* unused in sendmsg */
 			msg.msg_flags = 0;
 
 			ret = finish_sendmsg(funcinst, args.fd, &msg,
 					     convert_sendto_flags(args.flags));
 
+			_wasmjit_block_signals(&set);
+
 		error:
+			_wasmjit_remove_unfreed_pointer(funcinst, ptr_idx_1);
+			_wasmjit_remove_unfreed_pointer(funcinst, ptr_idx_2);
 			free(msg.msg_control);
 			free(msg.msg_iov);
+
+			_wasmjit_unblock_signals(&set);
+
 		}
 
 		break;
@@ -3101,6 +3299,7 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 		char *base;
 		user_msghdr_t msg;
 		struct em_msghdr emmsg;
+		size_t ptr_idx_1 = 0, ptr_idx_2 = 0;
 
 		LOAD_ARGS(funcinst, ivargs, 3,
 			  int32_t, fd,
@@ -3127,6 +3326,8 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 
 		memset(&msg, 0, sizeof(msg));
 
+		_wasmjit_block_signals(&set);
+
 		base = wasmjit_emscripten_get_base_address(funcinst);
 
 		if (emmsg.msg_name) {
@@ -3149,6 +3350,12 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 			goto error2;
 
 		msg.msg_iovlen = emmsg.msg_iovlen;
+
+		ptr_idx_2 = _wasmjit_add_unfreed_pointer(funcinst, msg.msg_iov);
+		if (!ptr_idx_2) {
+			ret = -ENOMEM;
+			goto error2;
+		}
 
 		if (emmsg.msg_control) {
 			size_t to_malloc;
@@ -3175,13 +3382,25 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 				goto error2;
 			}
 			msg.msg_controllen = to_malloc;
+
+			ptr_idx_1 = _wasmjit_add_unfreed_pointer(funcinst, msg.msg_control);
+			if (!ptr_idx_1) {
+				ret = -ENOMEM;
+				goto error2;
+			}
 		} else {
 			msg.msg_control = NULL;
 			msg.msg_controllen = 0;
 		}
 
+		_wasmjit_unblock_signals(&set);
+
 		ret = finish_recvmsg(args.fd, &msg,
 				     convert_recvfrom_flags(args.flags));
+
+		_wasmjit_block_signals(&set);
+		if (ret < 0)
+			goto error2;
 
 		/* write changed msg values back to wasm msg */
 		if (msg.msg_name) {
@@ -3192,8 +3411,10 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 		}
 
 		if (msg.msg_control) {
-			if (write_cmsg(base, &emmsg, &msg))
-				goto error_abort;
+			if (write_cmsg(base, &emmsg, &msg)) {
+				ret = LONG_MIN;
+				goto error2;
+			}
 		} else {
 			assert(!msg.msg_controllen);
 		}
@@ -3211,16 +3432,17 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 		emmsg.msg_flags = uint32_t_swap_bytes(emmsg.msg_flags);
 		memcpy(base + args.msg, &emmsg, sizeof(emmsg));
 
-		if (0) {
-		error_abort:
-			free(msg.msg_control);
-			free(msg.msg_iov);
+		error2:
+		_wasmjit_remove_unfreed_pointer(funcinst, ptr_idx_1);
+		_wasmjit_remove_unfreed_pointer(funcinst, ptr_idx_2);
+		free(msg.msg_control);
+		free(msg.msg_iov);
+		_wasmjit_unblock_signals(&set);
+
+		if (ret == LONG_MIN) {
 			wasmjit_emscripten_internal_abort("Unknown cmsg type!");
 		}
 
-		error2:
-		free(msg.msg_control);
-		free(msg.msg_iov);
 		break;
 	}
 	default: {
@@ -3429,6 +3651,7 @@ uint32_t wasmjit_emscripten____syscall145(uint32_t which, uint32_t varargs,
 {
 	struct iovec *liov;
 	long rret;
+	wasmjit_signal_block_ctx set;
 
 	LOAD_ARGS(funcinst, varargs, 3,
 		  int32_t, fd,
@@ -3437,11 +3660,15 @@ uint32_t wasmjit_emscripten____syscall145(uint32_t which, uint32_t varargs,
 
 	(void)which;
 
+	_wasmjit_block_signals(&set);
+
 	rret = copy_iov(funcinst, args.iov_user, args.iovcnt, &liov);
 	if (rret >= 0) {
 		rret = sys_readv(args.fd, liov, args.iovcnt);
 		free(liov);
 	}
+
+	_wasmjit_unblock_signals(&set);
 
 	return check_ret(rret);
 }
@@ -3631,12 +3858,26 @@ uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
 	} else {
 		uint32_t i, ret;
 		struct pollfd *fds;
+		wasmjit_signal_block_ctx set;
+		size_t ptr_idx_1 = 0;
+
+		_wasmjit_block_signals(&set);
 
 		fds = wasmjit_alloc_vector(args.nfds,
 					   sizeof(struct pollfd),
 					   NULL);
-		if (!fds)
-			return -EM_ENOMEM;
+		if (!fds) {
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		ptr_idx_1 = _wasmjit_add_unfreed_pointer(funcinst, fds);
+		if (!ptr_idx_1) {
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		_wasmjit_unblock_signals(&set);
 
 		for (i = 0; i < args.nfds; ++i) {
 			struct em_pollfd epfd;
@@ -3649,8 +3890,8 @@ uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
 			epfd.events = uint16_t_swap_bytes(epfd.events);
 
 			if (!check_poll_events(epfd.events)) {
-				free(fds);
-				return -EM_EINVAL;
+				ret = -EINVAL;
+				goto err;
 			}
 
 			fds[i].fd = epfd.fd;
@@ -3677,7 +3918,13 @@ uint32_t wasmjit_emscripten____syscall168(uint32_t which, uint32_t varargs,
 			       sizeof(epfd));
 		}
 
+		_wasmjit_block_signals(&set);
+
+		err:
+		_wasmjit_remove_unfreed_pointer(funcinst, ptr_idx_1);
 		free(fds);
+
+		_wasmjit_unblock_signals(&set);
 
 		return ret;
 	}
@@ -3851,6 +4098,7 @@ uint32_t wasmjit_emscripten____syscall191(uint32_t which, uint32_t varargs,
 	int32_t ret;
 	struct rlimit lrlim;
 	int sys_resource;
+	wasmjit_signal_block_ctx set;
 
 	LOAD_ARGS(funcinst, varargs, 2,
 		  int32_t, resource,
@@ -3864,7 +4112,9 @@ uint32_t wasmjit_emscripten____syscall191(uint32_t which, uint32_t varargs,
 
 	sys_resource = convert_resource(args.resource);
 
+	_wasmjit_block_signals(&set);
 	ret = check_ret(sys_getrlimit(sys_resource, &lrlim));
+	_wasmjit_unblock_signals(&set);
 	if (ret < 0)
 		return ret;
 
@@ -3880,6 +4130,7 @@ uint32_t wasmjit_emscripten____syscall340(uint32_t which, uint32_t varargs,
 	int sys_resource;
 	int32_t ret;
 	struct rlimit *new_limitp, *old_limitp, new_limit, old_limit;
+	wasmjit_signal_block_ctx set;
 
 	LOAD_ARGS(funcinst, varargs, 4,
 		  uint32_t, pid,
@@ -3910,7 +4161,9 @@ uint32_t wasmjit_emscripten____syscall340(uint32_t which, uint32_t varargs,
 
 	sys_resource = convert_resource(args.resource);
 
+	_wasmjit_block_signals(&set);
 	ret = check_ret(sys_prlimit(args.pid, sys_resource, new_limitp, old_limitp));
+	_wasmjit_unblock_signals(&set);
 	if (ret < 0)
 		return ret;
 
@@ -4240,6 +4493,7 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 	dirbuf = base + args.dirent;
 	dirbufsz = args.count;
 
+	/* NB: on Linux this is async-signal-safe */
 	ret = check_ret(sys_getdents64(args.fd, (void *) dirbuf, dirbufsz));
 	if (ret >= 0) {
 		/* if there was success, then we may need to do some conversion */
@@ -4328,6 +4582,7 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 	uint32_t fds;
 	char *dstbuf;
 	uint32_t res;
+	wasmjit_signal_block_ctx set;
 
 	LOAD_ARGS(funcinst, varargs, 3,
 		  uint32_t, fd,
@@ -4336,8 +4591,17 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 
 	(void)which;
 
-	if (!_wasmjit_emscripten_check_range(funcinst, args.dirent, args.count))
-		return -EM_EFAULT;
+	/* NB: we must block signals while invoking libc *dir() functions
+	   if reading a directory blocks indefinitely (like NFS or FUSE),
+	   the process will be unresponsive to signals, but usually this is
+	   the case anyway, since disk IO usually makes processes uninterruptible
+	 */
+	_wasmjit_block_signals(&set);
+
+	if (!_wasmjit_emscripten_check_range(funcinst, args.dirent, args.count)) {
+		res = -(int32_t) EM_EFAULT;
+		goto err;
+	}
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
@@ -4348,11 +4612,15 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 		size_t oldlen = ctx->fd_table.n_elts;
 
 		/* check that the descriptor is valid */
-		if (fcntl(args.fd, F_GETFD) < 0)
-			return check_ret(-errno);
+		if (fcntl(args.fd, F_GETFD) < 0) {
+			res = check_ret(-errno);
+			goto err;
+		}
 
-		if (!VECTOR_GROW(&ctx->fd_table, args.fd + 1 - ctx->fd_table.n_elts))
-			return -EM_ENOMEM;
+		if (!VECTOR_GROW(&ctx->fd_table, args.fd + 1 - ctx->fd_table.n_elts)) {
+			res = -(int32_t) EM_ENOMEM;
+			goto err;
+		}
 
 		memset(&ctx->fd_table.elts[oldlen], 0, sizeof(file) * (args.fd + 1 - oldlen));
 	}
@@ -4360,15 +4628,18 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 	file = ctx->fd_table.elts[fds];
 	if (!file) {
 		file = calloc(1, sizeof(*file));
-		if (!file)
-			return -EM_ENOMEM;
+		if (!file) {
+			res = -(int32_t) EM_ENOMEM;
+			goto err;
+		}
 		ctx->fd_table.elts[args.fd] = file;
 	}
 
 	if (!file->dirp) {
 		file->dirp = fdopendir(args.fd);
 		if (!file->dirp) {
-			return check_ret(-errno);
+			res = check_ret(-errno);
+			goto err;
 		}
 	}
 
@@ -4421,6 +4692,9 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 		dstbuf += newdstsz;
 		res += newdstsz;
 	}
+
+ err:
+	_wasmjit_unblock_signals(&set);
 
 	return res;
 }
@@ -4702,6 +4976,7 @@ uint32_t wasmjit_emscripten____syscall268(uint32_t which, uint32_t varargs,
 	char *base;
 	user_statvfs stvfs;
 	int32_t ret;
+	wasmjit_signal_block_ctx set;
 
 	LOAD_ARGS(funcinst, varargs, 3,
 		  uint32_t, pathname,
@@ -4718,7 +4993,9 @@ uint32_t wasmjit_emscripten____syscall268(uint32_t which, uint32_t varargs,
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
+	_wasmjit_block_signals(&set);
 	ret = check_ret(sys_statvfs(base + args.pathname, &stvfs));
+	_wasmjit_unblock_signals(&set);
 	if (ret >= 0) {
 		struct em_statfs64 out;
 
@@ -4811,6 +5088,8 @@ uint32_t wasmjit_emscripten____syscall272(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
 	int advice;
+	int32_t res;
+	wasmjit_signal_block_ctx set;
 
 	LOAD_ARGS(funcinst, varargs, 4,
 		  uint32_t, fd,
@@ -4826,7 +5105,11 @@ uint32_t wasmjit_emscripten____syscall272(uint32_t which, uint32_t varargs,
 
 	advice = convert_advice(args.advice);
 
-	return check_ret(sys_posix_fadvise(args.fd, args.offset, args.len, advice));
+	_wasmjit_block_signals(&set);
+	res = check_ret(sys_posix_fadvise(args.fd, args.offset, args.len, advice));
+	_wasmjit_unblock_signals(&set);
+
+	return res;
 }
 
 /* openat */
@@ -4931,7 +5214,9 @@ uint32_t wasmjit_emscripten____syscall334(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
 	int32_t ret;
-	struct iovec *liov;
+	struct iovec *liov = NULL;
+	wasmjit_signal_block_ctx set;
+	size_t ptr_idx_1 = 0;
 
 	LOAD_ARGS(funcinst, varargs, 4,
 		  uint32_t, fd,
@@ -4941,11 +5226,28 @@ uint32_t wasmjit_emscripten____syscall334(uint32_t which, uint32_t varargs,
 
 	(void)which;
 
+	_wasmjit_block_signals(&set);
+
 	ret = check_ret(copy_iov(funcinst, args.iov, args.iovcnt, &liov));
-	if (ret < 0) {
-		ret = check_ret(sys_pwritev(args.fd, liov, args.iovcnt, args.offset));
-		free(liov);
+	if (ret < 0)
+		goto error;
+
+	ptr_idx_1 = _wasmjit_add_unfreed_pointer(funcinst, liov);
+	if (!ptr_idx_1) {
+		ret = -EM_ENOMEM;
+		goto error;
 	}
+
+	_wasmjit_unblock_signals(&set);
+	/* NB: We have to assume that pwritev() is async-signal-safe because
+	   it may block indefinitely and we don't want to block signals during that */
+	ret = check_ret(sys_pwritev(args.fd, liov, args.iovcnt, args.offset));
+	_wasmjit_block_signals(&set);
+
+error:
+	_wasmjit_remove_unfreed_pointer(funcinst, ptr_idx_1);
+	free(liov);
+	_wasmjit_unblock_signals(&set);
 
 	return ret;
 }
@@ -5042,6 +5344,8 @@ uint32_t wasmjit_emscripten____syscall75(uint32_t which, uint32_t varargs,
 {
 	struct rlimit lrlim;
 	int sys_resource;
+	uint32_t ret;
+	wasmjit_signal_block_ctx set;
 
 	LOAD_ARGS(funcinst, varargs, 2,
 		  int32_t, resource,
@@ -5054,7 +5358,11 @@ uint32_t wasmjit_emscripten____syscall75(uint32_t which, uint32_t varargs,
 
 	sys_resource = convert_resource(args.resource);
 
-	return check_ret(sys_setrlimit(sys_resource, &lrlim));
+	_wasmjit_block_signals(&set);
+	ret = check_ret(sys_setrlimit(sys_resource, &lrlim));
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 /* readlink */
@@ -5101,6 +5409,8 @@ uint32_t wasmjit_emscripten____syscall97(uint32_t which, uint32_t varargs,
 					 struct FuncInst *funcinst)
 {
 	int sys_which;
+	wasmjit_signal_block_ctx set;
+	uint32_t ret;
 
 	LOAD_ARGS(funcinst, varargs, 3,
 		  int32_t, which,
@@ -5119,8 +5429,11 @@ uint32_t wasmjit_emscripten____syscall97(uint32_t which, uint32_t varargs,
 	default: return -EM_EINVAL;
 	}
 #endif
+	_wasmjit_block_signals(&set);
+	ret = check_ret(sys_setpriority(sys_which, args.who, args.niceval));
+	_wasmjit_unblock_signals(&set);
 
-	return check_ret(sys_setpriority(sys_which, args.who, args.niceval));
+	return ret;
 }
 
 __attribute__((noreturn))
@@ -5208,6 +5521,9 @@ uint32_t wasmjit_emscripten__execve(uint32_t pathname,
 #else
 	char **largv = NULL, **lenvp = NULL, *base;
 	int32_t ret;
+	wasmjit_signal_block_ctx set;
+
+	_wasmjit_block_signals(&set);
 
 	if (!_wasmjit_emscripten_check_string(funcinst, pathname, PATH_MAX)) {
 		errno = EFAULT;
@@ -5225,8 +5541,12 @@ uint32_t wasmjit_emscripten__execve(uint32_t pathname,
 		goto err;
 	}
 
+	_wasmjit_unblock_signals(&set);
+
 	base = wasmjit_emscripten_get_base_address(funcinst);
 	ret = execve(base + pathname, largv, lenvp);
+
+	_wasmjit_block_signals(&set);
 	if (ret < 0) {
  err:
 		assert(errno >= 0);
@@ -5235,6 +5555,8 @@ uint32_t wasmjit_emscripten__execve(uint32_t pathname,
 
 	free(largv);
 	free(lenvp);
+
+	_wasmjit_unblock_signals(&set);
 
 	return ret;
 #endif
@@ -5564,6 +5886,29 @@ void setgrent(void)
 	return;
 }
 
+int sigemptyset(sigset_t *set)
+{
+	/* TODO: implement */
+	(void) set;
+	return -1;
+}
+
+int sigaddset(sigset_t *set, int sig)
+{
+	/* TODO: implement */
+	(void) set;
+	(void) sig;
+	return -1;
+}
+
+int sigismember(sigset_t *set, int sig)
+{
+	/* TODO: implement */
+	(void) set;
+	(void) sig;
+	return -1;
+}
+
 #elif __APPLE__
 
 int sem_init(sem_t *sem, int pshared, unsigned int value)
@@ -5714,6 +6059,7 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 	struct sockaddr_storage ss;
 #endif
 	int32_t filter_protocol = 0;
+	wasmjit_signal_block_ctx set;
 
 	if (!_wasmjit_emscripten_check_string(funcinst, node, PATH_MAX)) {
 		ret = EAI_SYSTEM;
@@ -5842,6 +6188,8 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 		hintp = NULL;
 	}
 
+	_wasmjit_block_signals(&set);
+
 	ret = getaddrinfo(base + node, base + service, hintp, &res);
 	if (ret) {
 	err:
@@ -5956,6 +6304,8 @@ uint32_t wasmjit_emscripten__getaddrinfo(uint32_t node,
 		}
 	}
 
+	_wasmjit_unblock_signals(&set);
+
 	return convert_getaddrinfo_return(ret);
 }
 
@@ -5967,8 +6317,13 @@ uint32_t wasmjit_emscripten__gai_strerror(uint32_t errcode,
 	const char *msg;
 	char *base;
 	int sys_errcode;
+	wasmjit_signal_block_ctx set;
+	uint32_t ret;
 	struct EmscriptenContext *ctx =
 		_wasmjit_emscripten_get_context(funcinst);
+
+	/* NB: also protect setting ctx->gai_strerror_buffer */
+	_wasmjit_block_signals(&set);
 
 	if (!ctx->gai_strerror_buffer) {
 		ctx->gai_strerror_buffer = getMemory(funcinst, GAI_STRERROR_BUF_SIZE);
@@ -5985,7 +6340,11 @@ uint32_t wasmjit_emscripten__gai_strerror(uint32_t errcode,
 	strncpy(base + ctx->gai_strerror_buffer, msg, GAI_STRERROR_BUF_SIZE);
 	(base + ctx->gai_strerror_buffer)[GAI_STRERROR_BUF_SIZE - 1] = '\0';
 
-	return ctx->gai_strerror_buffer;
+	ret = ctx->gai_strerror_buffer;
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 uint32_t wasmjit_emscripten__getenv(uint32_t name,
@@ -5993,12 +6352,16 @@ uint32_t wasmjit_emscripten__getenv(uint32_t name,
 {
 	char *base, *env;
 	uint32_t ret;
+	wasmjit_signal_block_ctx set;
 
 	if (!_wasmjit_emscripten_check_string(funcinst, name, PATH_MAX)) {
 		return 0;
 	}
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	/* NB: also protect setting ctx->getenv_buffer */
+	_wasmjit_block_signals(&set);
 
 	env = getenv(base + name);
 
@@ -6015,6 +6378,8 @@ uint32_t wasmjit_emscripten__getenv(uint32_t name,
 	} else {
 		ret = 0;
 	}
+
+	_wasmjit_unblock_signals(&set);
 
 	return ret;
 }
@@ -6117,6 +6482,11 @@ static uint32_t convert_group(struct FuncInst *funcinst, struct group *gr)
 uint32_t wasmjit_emscripten__getgrent(struct FuncInst *funcinst)
 {
 	struct group *gr;
+	wasmjit_signal_block_ctx set;
+	uint32_t ret;
+
+	/* NB: also protect setting ctx->getgrent_buffer */
+	_wasmjit_block_signals(&set);
 
 	errno = 0;
 	gr = getgrent();
@@ -6125,7 +6495,11 @@ uint32_t wasmjit_emscripten__getgrent(struct FuncInst *funcinst)
 		return 0;
 	}
 
-	return convert_group(funcinst, gr);
+	ret = convert_group(funcinst, gr);
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 uint32_t wasmjit_emscripten__getgrnam(uint32_t name,
@@ -6133,12 +6507,17 @@ uint32_t wasmjit_emscripten__getgrnam(uint32_t name,
 {
 	struct group *gr;
 	char *base;
+	wasmjit_signal_block_ctx set;
+	uint32_t ret;
 
 	if (!_wasmjit_emscripten_check_string(funcinst, name, PATH_MAX)) {
 		return 0;
 	}
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	/* NB: also protect setting ctx->getgrent_buffer */
+	_wasmjit_block_signals(&set);
 
 	errno = 0;
 	gr = getgrnam(base + name);
@@ -6147,7 +6526,11 @@ uint32_t wasmjit_emscripten__getgrnam(uint32_t name,
 		return 0;
 	}
 
-	return convert_group(funcinst, gr);
+	ret = convert_group(funcinst, gr);
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 uint32_t wasmjit_emscripten__getpagesize(struct FuncInst *funcinst) {
@@ -6247,12 +6630,17 @@ uint32_t wasmjit_emscripten__getpwnam(uint32_t name,
 {
 	struct passwd *pw;
 	char *base;
+	uint32_t ret;
+	wasmjit_signal_block_ctx set;
 
 	if (!_wasmjit_emscripten_check_string(funcinst, name, PATH_MAX)) {
 		return 0;
 	}
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	/* NB: also protect setting ctx->getpwent_buffer */
+	_wasmjit_block_signals(&set);
 
 	errno = 0;
 	pw = getpwnam(base + name);
@@ -6261,7 +6649,11 @@ uint32_t wasmjit_emscripten__getpwnam(uint32_t name,
 		return 0;
 	}
 
-	return convert_passwd(funcinst, pw);
+	ret = convert_passwd(funcinst, pw);
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
@@ -6271,6 +6663,8 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
 	struct timeval tv;
 	struct timezone tz;
 	long rret;
+	wasmjit_signal_block_ctx set;
+	uint32_t ret;
 
 	if (!_wasmjit_emscripten_check_range(funcinst, emtv, sizeof(struct em_timeval)))
 		return -EM_EFAULT;
@@ -6279,6 +6673,8 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
 		return -EM_EFAULT;
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	_wasmjit_block_signals(&set);
 
 	rret = sys_gettimeofday(&tv, &tz);
 	if (rret < 0) {
@@ -6307,11 +6703,17 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
 		memcpy(base + emtz, &emtzl, sizeof(emtzl));
 	}
 
-	return 0;
+	ret = 0;
 
- err:
-	wasmjit_emscripten____setErrNo(convert_errno(-rret), funcinst);
-	return -1;
+	if (0) {
+	err:
+		ret = -1;
+		wasmjit_emscripten____setErrNo(convert_errno(-rret), funcinst);
+	}
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 static uint32_t time_exploder(struct tm *(*exploder)(const time_t *, struct tm *),
@@ -6324,8 +6726,12 @@ static uint32_t time_exploder(struct tm *(*exploder)(const time_t *, struct tm *
 	time_t time_;
 	struct tm tm_, *sys_tmPtr;
 	struct em_tm em_tm_;
+	wasmjit_signal_block_ctx set;
+	uint32_t ret;
 	struct EmscriptenContext *ctx =
 		_wasmjit_emscripten_get_context(funcinst);
+
+	_wasmjit_block_signals(&set);
 
 	if (_wasmjit_emscripten_copy_from_user(funcinst, &em_time, timePtr, sizeof(em_time))) {
 		errno = EFAULT;
@@ -6382,11 +6788,17 @@ static uint32_t time_exploder(struct tm *(*exploder)(const time_t *, struct tm *
 
 	memcpy(base + tmPtr, &em_tm_, sizeof(em_tm_));
 
-	return tmPtr;
+	ret = tmPtr;
 
- err:
-	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
-	return 0;
+	if (0) {
+	err:
+		ret = 0;
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	}
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 uint32_t wasmjit_emscripten__gmtime_r(uint32_t timePtr,
@@ -6503,6 +6915,9 @@ void wasmjit_emscripten__llvm_stackrestore(uint32_t p,
 	struct EmscriptenContext *ctx =
 		_wasmjit_emscripten_get_context(funcinst);
 	void *newsavedstacks;
+	wasmjit_signal_block_ctx set;
+
+	_wasmjit_block_signals(&set);
 
 	if (p >= ctx->LLVM_SAVEDSTACKS_sz)
 		wasmjit_emscripten_internal_abort("bad stack restore index");
@@ -6521,6 +6936,8 @@ void wasmjit_emscripten__llvm_stackrestore(uint32_t p,
 
 	ctx->LLVM_SAVEDSTACKS = newsavedstacks;
 
+	_wasmjit_unblock_signals(&set);
+
 	_stackRestore(funcinst, foo);
 }
 
@@ -6530,8 +6947,12 @@ uint32_t wasmjit_emscripten__llvm_stacksave(struct FuncInst *funcinst)
 		_wasmjit_emscripten_get_context(funcinst);
 	void *newsavedstacks;
 	uint32_t foo;
+	wasmjit_signal_block_ctx set;
+	uint32_t ret;
 
 	foo = _stackSave(funcinst);
+
+	_wasmjit_block_signals(&set);
 
 	ctx->LLVM_SAVEDSTACKS_sz += 1;
 
@@ -6543,7 +6964,11 @@ uint32_t wasmjit_emscripten__llvm_stacksave(struct FuncInst *funcinst)
 	ctx->LLVM_SAVEDSTACKS = newsavedstacks;
 	ctx->LLVM_SAVEDSTACKS[ctx->LLVM_SAVEDSTACKS_sz - 1] = foo;
 
-	return ctx->LLVM_SAVEDSTACKS_sz - 1;
+	ret = ctx->LLVM_SAVEDSTACKS_sz - 1;
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 uint32_t wasmjit_emscripten__localtime_r(uint32_t timePtr, uint32_t tmPtr,
@@ -6556,6 +6981,10 @@ uint32_t wasmjit_emscripten__localtime(uint32_t timePtr,
 				       struct FuncInst *funcinst)
 {
 	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
+	wasmjit_signal_block_ctx set;
+	uint32_t ret;
+
+	_wasmjit_block_signals(&set);
 
 	if (!ctx->tmtm_buffer) {
 		ctx->tmtm_buffer = getMemory(funcinst, sizeof(struct em_tm));
@@ -6565,11 +6994,17 @@ uint32_t wasmjit_emscripten__localtime(uint32_t timePtr,
 		}
 	}
 
-	return wasmjit_emscripten__localtime_r(timePtr, ctx->tmtm_buffer, funcinst);
+	ret = wasmjit_emscripten__localtime_r(timePtr, ctx->tmtm_buffer, funcinst);
 
- err:
-	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
-	return 0;
+	if (0) {
+	err:
+		ret = 0;
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+	}
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 uint32_t wasmjit_emscripten__mktime(uint32_t tmPtr,
@@ -6578,6 +7013,7 @@ uint32_t wasmjit_emscripten__mktime(uint32_t tmPtr,
 	struct em_tm emtm;
 	struct tm tm;
 	time_t toret;
+	wasmjit_signal_block_ctx set;
 
 	if (_wasmjit_emscripten_copy_from_user(funcinst, &emtm, tmPtr, sizeof(emtm))) {
 		errno = EFAULT;
@@ -6599,7 +7035,9 @@ uint32_t wasmjit_emscripten__mktime(uint32_t tmPtr,
 	p(isdst);
 	p(gmtoff);
 
+	_wasmjit_block_signals(&set);
 	toret = mktime(&tm);
+	_wasmjit_unblock_signals(&set);
 
 	if (OVERFLOWS(toret)) {
 		errno = EOVERFLOW;
@@ -6629,6 +7067,9 @@ uint32_t wasmjit_emscripten__raise(uint32_t sig,
 uint32_t wasmjit_emscripten__sched_yield(struct FuncInst *funcinst)
 {
 	long rret;
+
+	/* NB: we assume this is async-signal-safe because it wouldn't make
+	   sense otherwise */
 	rret = sys_sched_yield();
 	if (rret < 0) {
 		wasmjit_emscripten____setErrNo(convert_errno(-rret), funcinst);
@@ -6651,6 +7092,10 @@ uint32_t wasmjit_emscripten__sem_init(uint32_t sem,
 	size_t idx;
 	int sem_ret;
 	struct EmscriptenContext *ctx = _wasmjit_emscripten_get_context(funcinst);
+	wasmjit_signal_block_ctx set;
+	int32_t ret;
+
+	_wasmjit_block_signals(&set);
 
 	/* cross-process semaphores can't be supported because we don't
 	   know where to allocate cross-process memory */
@@ -6698,12 +7143,18 @@ uint32_t wasmjit_emscripten__sem_init(uint32_t sem,
 	assert(sizeof(idx) <= sizeof(em_sem_t));
 	memcpy(base + sem, &idx, sizeof(idx));
 
-	return 0;
+	ret = 0;
 
- err:
-	free(real_sem);
-	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
-	return (int32_t) -1;
+	if (0) {
+	err:
+		free(real_sem);
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = (int32_t) -1;
+	}
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
 }
 
 static uint32_t wasmjit_emscripten_sem_op(uint32_t sem,
@@ -6756,13 +7207,20 @@ uint32_t wasmjit_emscripten__sem_post(uint32_t sem,
 uint32_t wasmjit_emscripten__sem_wait(uint32_t sem,
 				      struct FuncInst *funcinst)
 {
+	/* sem_wait is not guaranteed to be async-signal-safe but since
+	   it can block for arbitrarily long, we don't block signals */
 	return wasmjit_emscripten_sem_op(sem, funcinst, &sem_wait);
 }
 
 void wasmjit_emscripten__setgrent(struct FuncInst *funcinst)
 {
+	wasmjit_signal_block_ctx set;
+
 	(void) funcinst;
+
+	_wasmjit_block_signals(&set);
 	(void) setgrent();
+	_wasmjit_unblock_signals(&set);
 }
 
 uint32_t wasmjit_emscripten__setgroups(uint32_t ngroups,
@@ -6774,6 +7232,9 @@ uint32_t wasmjit_emscripten__setgroups(uint32_t ngroups,
 	gid_t *sys_gidset = NULL;
 	long rret;
 	size_t range;
+	wasmjit_signal_block_ctx set;
+
+	_wasmjit_block_signals(&set);
 
 	if (__builtin_mul_overflow(ngroups,
 				   sizeof(em_gid_t),
@@ -6815,6 +7276,8 @@ uint32_t wasmjit_emscripten__setgroups(uint32_t ngroups,
 
 	free(sys_gidset);
 
+	_wasmjit_unblock_signals(&set);
+
 	return ret;
 }
 
@@ -6832,6 +7295,10 @@ uint32_t wasmjit_emscripten__setitimer(uint32_t which,
 	long rret;
 	struct itimerval sys_new_value_v, sys_old_value_v;
 	void *sys_new_value, *sys_old_value;
+	wasmjit_signal_block_ctx set;
+	int32_t ret;
+
+	_wasmjit_block_signals(&set);
 
 	if (!_wasmjit_emscripten_check_range(funcinst, new_value, sizeof(struct em_itimerval)) ||
 	    (old_value &&
@@ -6904,16 +7371,409 @@ uint32_t wasmjit_emscripten__setitimer(uint32_t which,
 		}
 	}
 
-	return 0;
+	ret = 0;
 
- err:
-	wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
-	return (int32_t) -1;
+	if (0) {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = (int32_t) -1;
+	}
+
+	_wasmjit_unblock_signals(&set);
+
+	return ret;
+
+#undef PASSTHROUGH
 }
+
+#ifdef __KERNEL__
+
+uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
+				       uint32_t act,
+				       uint32_t oldact,
+				       struct FuncInst *funcinst)
+{
+	(void) signum;
+	(void) act;
+	(void) oldact;
+	(void) funcinst;
+	/* TODO: implement */
+	wasmjit_emscripten____setErrNo(EM_ENOSYS, funcinst);
+	return -1;
+}
+
+#else
+
+#define _EM_NSIG (sizeof(em_sigset_t) * CHAR_BIT + 1)
+
+static int em_sigaddset(em_sigset_t *set, em_int sig)
+{
+	unsigned s = sig-1;
+	assert(!(s >= _EM_NSIG-1 || sig-32U < 3));
+	set->__bits[s/8/sizeof *set->__bits] |= 1UL<<(s&8*sizeof *set->__bits-1);
+	return 0;
+}
+
+static int em_sigemptyset(em_sigset_t *set)
+{
+        set->__bits[0] = 0;
+        if (sizeof(long)==4 || _EM_NSIG > 65) set->__bits[1] = 0;
+        if (sizeof(long)==4 && _EM_NSIG > 65) {
+                set->__bits[2] = 0;
+                set->__bits[3] = 0;
+        }
+        return 0;
+}
+
+static int em_sigismember(const em_sigset_t *set, em_int sig)
+{
+	unsigned s = sig-1;
+	assert(!(s >= _EM_NSIG-1));
+	return !!(set->__bits[s/8/sizeof *set->__bits] & 1UL<<(s&8*sizeof *set->__bits-1));
+}
+
+static int convert_signal(em_int signum)
+{
+	if (
+#define SIG(NAME, NUM) NUM == SIG ## NAME &&
+#include <wasmjit/emscripten_runtime_sys_sig_def.h>
+#undef SIG
+	    1) {
+#if !IS_LINUX
+		if (
+#define SIG(NAME, NUM) signum != NUM &&
+#include <wasmjit/emscripten_runtime_sys_sig_def.h>
+#undef SIG
+		    1) {
+			return -1;
+		}
+#endif
+		return signum;
+	} else {
+		switch (signum) {
+#define SIG(NAME, NUM) case NUM: return SIG ## NAME; break;
+#include <wasmjit/emscripten_runtime_sys_sig_def.h>
+#undef SIG
+		default: return -1;
+		}
+	}
+}
+
+static em_int back_convert_signal(int signo)
+{
+	switch (signo) {
+#define SIG(NAME, NUM) case SIG ## NAME: return NUM; break;
+#include <wasmjit/emscripten_runtime_sys_sig_def.h>
+#undef SIG
+	default: return -1;
+	}
+}
+
+#define EM_SA_NOCLDSTOP  1
+#define EM_SA_NOCLDWAIT  2
+#define EM_SA_SIGINFO    4
+#define EM_SA_ONSTACK    0x08000000
+#define EM_SA_RESTART    0x10000000
+#define EM_SA_NODEFER    0x40000000
+#define EM_SA_RESETHAND  0x80000000
+#define EM_SA_RESTORER   0x04000000
+
+static int check_sa_flags(uint32_t sa_flags)
+{
+	uint32_t all =
+		EM_SA_NOCLDSTOP |
+		EM_SA_NOCLDWAIT |
+		EM_SA_SIGINFO |
+		EM_SA_ONSTACK |
+		EM_SA_RESTART |
+		EM_SA_NODEFER |
+		EM_SA_RESETHAND |
+		0;
+
+	return !(sa_flags & ~all);
+}
+
+static int convert_sa_flags(em_int sa_flags)
+{
+	int n_sa_flags = 0;
+
+#define p(n)					\
+	if (sa_flags & EM_SA_ ## n)		\
+		n_sa_flags |= SA_ ## n
+
+	p(NOCLDSTOP);
+	p(NOCLDWAIT);
+	p(SIGINFO);
+	p(ONSTACK);
+	p(RESTART);
+	p(NODEFER);
+	p(RESETHAND);
+
+#undef p
+
+	return n_sa_flags;
+}
+
+static em_int back_convert_sa_flags(int sa_flags)
+{
+	em_int n_sa_flags = 0;
+
+#define p(n)					\
+	if (sa_flags & SA_ ## n)		\
+		n_sa_flags |= EM_SA_ ## n
+
+	p(NOCLDSTOP);
+	p(NOCLDWAIT);
+	p(SIGINFO);
+	p(ONSTACK);
+	p(RESTART);
+	p(NODEFER);
+	p(RESETHAND);
+
+#undef p
+
+	return n_sa_flags;
+}
+
+#define EM_SIG_DFL  ((em_funcptr) 0)
+#define EM_SIG_IGN  ((em_funcptr) 1)
+
+static void _wasmjit_emscripten_sigaction_handler(int signum,
+						  siginfo_t *sinfo,
+						  void *uap)
+{
+	struct EmscriptenContext *ctx;
+	em_funcptr fptr;
+	struct FuncInst *funcinst;
+	union ValueUnion args[4];
+	struct FuncInst *handler_dyncall, *sigaction_dyncall;
+	int saved;
+	int32_t em_signum;
+
+	saved = errno;
+
+	em_signum = back_convert_signal(signum);
+
+	/* NB: this shouldn't happen */
+	assert(em_signum >= 0);
+
+	if (_g_handler_setting) return;
+	compiler_barrier();
+	ctx = _g_handler_ctx;
+	if (!ctx) return;
+
+	handler_dyncall = wasmjit_get_export(ctx->asm_, "dynCall_vi",
+					     IMPORT_DESC_TYPE_FUNC).func;
+
+	sigaction_dyncall = wasmjit_get_export(ctx->asm_, "dynCall_viii",
+					       IMPORT_DESC_TYPE_FUNC).func;
+
+	if (ctx->sig_handlers[em_signum].is_sigaction) {
+		fptr = ctx->sig_handlers[em_signum].handler.em_sa_sigaction;
+		funcinst = sigaction_dyncall;
+	} else {
+		fptr = ctx->sig_handlers[em_signum].handler.em_sa_handler;
+		funcinst = handler_dyncall;
+	}
+
+	if (!funcinst) return;
+
+	assert(fptr != EM_SIG_IGN);
+	assert(fptr != EM_SIG_DFL);
+
+	/* TODO: CONVERT */
+	(void) sinfo;
+	/* TODO: convert this to some wasm usable representation of cpu state */
+	(void) uap;
+
+	args[0].i32 = fptr;
+	args[1].i32 = em_signum;
+	args[2].i32 = 0;
+	args[3].i32 = 0;
+
+	/* if process aborts during signal handler, it will longjmp to
+	   to main() invoker */
+	(void) wasmjit_invoke_function(funcinst, args, NULL);
+
+	errno = saved;
+}
+
+uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
+				       uint32_t act,
+				       uint32_t oldact,
+				       struct FuncInst *funcinst)
+{
+	long rret;
+	int sys_sig;
+	struct sigaction sys_act_v, sys_oldact_v,
+		*sys_act, *sys_oldact;
+	struct em_sigaction act_v;
+	size_t i;
+	int32_t ret;
+
+	if ((act &&
+	     _wasmjit_emscripten_copy_from_user(funcinst, &act_v,
+						act, sizeof(struct em_sigaction))) ||
+	    (oldact &&
+	     !_wasmjit_emscripten_check_range(funcinst, oldact, sizeof(struct em_sigaction)))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	if (act) {
+		/* NB: we can't generally support restorer,
+		   and emscripten doesn't use it */
+		if (act_v.sa_restorer) {
+			errno = EINVAL;
+			goto err;
+		}
+
+		for (i = 0; i < ARRAY_LEN(act_v.sa_mask.__bits); ++i) {
+			act_v.sa_mask.__bits[i] = uint32_t_swap_bytes(act_v.sa_mask.__bits[i]);
+		}
+
+		act_v.sa_flags = uint32_t_swap_bytes(act_v.sa_flags);
+		if (act_v.sa_flags & EM_SA_SIGINFO) {
+			act_v.__sa_handler.em_sa_sigaction =
+				uint32_t_swap_bytes(act_v.__sa_handler.em_sa_sigaction);
+		} else {
+			act_v.__sa_handler.em_sa_handler =
+				uint32_t_swap_bytes(act_v.__sa_handler.em_sa_handler);
+		}
+	}
+
+	sys_sig = convert_signal(signum);
+	if (sys_sig < 0) {
+		errno = EINVAL;
+		goto err;
+	}
+
+	if (act) {
+		em_int signo;
+
+		/* convert sa_flags */
+		if (!check_sa_flags(act_v.sa_flags)) {
+			errno = EINVAL;
+			goto err;
+		}
+
+		sys_act_v.sa_flags = convert_sa_flags(act_v.sa_flags & ~(uint32_t) EM_SA_SIGINFO);
+
+		/* convert sighandler / sigaction:
+		     we need to save which function idx to call for which signal in
+		     emscripten context */
+		if (((act_v.sa_flags & EM_SA_SIGINFO) &&
+		     act_v.__sa_handler.em_sa_sigaction == EM_SIG_DFL) ||
+		    act_v.__sa_handler.em_sa_handler == EM_SIG_DFL) {
+			sys_act_v.sa_handler = SIG_DFL;
+		} else if (((act_v.sa_flags & EM_SA_SIGINFO) &&
+			    act_v.__sa_handler.em_sa_sigaction == EM_SIG_IGN) ||
+			   act_v.__sa_handler.em_sa_handler == EM_SIG_IGN) {
+			sys_act_v.sa_handler = SIG_IGN;
+		} else {
+			sys_act_v.sa_sigaction = _wasmjit_emscripten_sigaction_handler;
+			sys_act_v.sa_flags |= SA_SIGINFO;
+		}
+
+		/* convert sa_mask */
+		sigemptyset(&sys_act_v.sa_mask);
+		for (signo = 1; (size_t) signo < sizeof(act_v.sa_mask) * CHAR_BIT; ++signo) {
+			if (em_sigismember(&act_v.sa_mask, signo)) {
+				int sys_signo = convert_signal(signo);
+				/* Nb: if the signal doesn't exist on the host system
+				   we don't have to mask it */
+				if (sys_signo >= 0) {
+					sigaddset(&sys_act_v.sa_mask, sys_signo);
+				}
+			}
+		}
+
+		sys_act = &sys_act_v;
+	} else {
+		sys_act = NULL;
+	}
+
+	sys_oldact = oldact ? &sys_oldact_v : NULL;
+
+	rret = sys_sigaction(sys_sig, sys_act, sys_oldact);
+	if (rret < 0) {
+		errno = -rret;
+		goto err;
+	}
+
+	{
+		struct em_sigaction oldact_v;
+		struct EmscriptenContext *ctx =
+			_wasmjit_emscripten_get_context(funcinst);
+
+		if (sys_oldact) {
+			em_sigemptyset(&oldact_v.sa_mask);
+			for (i = 1; i < sizeof(sys_oldact_v.sa_mask) * CHAR_BIT; ++i) {
+				if (sigismember(&sys_oldact_v.sa_mask, i)) {
+					int32_t signo = back_convert_signal(i);
+					if (signo >= 0) {
+						em_sigaddset(&oldact_v.sa_mask, signo);
+					}
+				}
+			}
+
+			oldact_v.sa_flags = back_convert_sa_flags(sys_oldact_v.sa_flags);
+
+			oldact_v.__sa_handler = ctx->sig_handlers[signum].handler;
+			if (ctx->sig_handlers[signum].is_sigaction) {
+				oldact_v.sa_flags |= EM_SA_SIGINFO;
+			}
+
+			oldact_v.sa_restorer = 0;
+		}
+
+		/* write out oldact_v to memory */
+		if (sys_oldact) {
+			char *base;
+			base = wasmjit_emscripten_get_base_address(funcinst);
+
+			if (oldact_v.sa_flags & EM_SA_SIGINFO) {
+				oldact_v.__sa_handler.em_sa_sigaction =
+					uint32_t_swap_bytes(oldact_v.__sa_handler.em_sa_sigaction);
+			} else {
+				oldact_v.__sa_handler.em_sa_sigaction =
+					uint32_t_swap_bytes(oldact_v.__sa_handler.em_sa_sigaction);
+			}
+
+			oldact_v.sa_flags = uint32_t_swap_bytes(oldact_v.sa_flags);
+
+			for (i = 0; i < ARRAY_LEN(oldact_v.sa_mask.__bits); ++i) {
+				oldact_v.sa_mask.__bits[i] = uint32_t_swap_bytes(oldact_v.sa_mask.__bits[i]);
+			}
+
+			memcpy(base + oldact, &oldact_v, sizeof(oldact_v));
+		}
+
+		if (sys_act) {
+			ctx->sig_handlers[signum].is_sigaction =
+				!!(act_v.sa_flags & EM_SA_SIGINFO);
+			ctx->sig_handlers[signum].handler =
+				act_v.__sa_handler;
+		}
+	}
+
+	ret = 0;
+
+	if (0) {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = (int32_t) -1;
+	}
+
+	return ret;
+}
+
+#endif
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
+	remove_signal_context();
 }
 
 struct EmscriptenContext *wasmjit_emscripten_get_context(struct ModuleInst *module_inst)
