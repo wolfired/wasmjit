@@ -7780,6 +7780,36 @@ uint32_t wasmjit_emscripten____syscall29(uint32_t which,
 	return check_ret(sys_pause());
 }
 
+uint32_t wasmjit_emscripten__sigaddset(uint32_t set,
+				       uint32_t signum,
+				       struct FuncInst *funcinst)
+{
+	em_sigset_t set_v;
+	char *base;
+	size_t i;
+
+	if (_wasmjit_emscripten_copy_from_user(funcinst, &set_v, set, sizeof(set_v))) {
+		return 0;
+	}
+
+	for (i = 0; i < ARRAY_LEN(set_v.__bits); ++i) {
+		set_v.__bits[i] = uint32_t_swap_bytes(set_v.__bits[i]);
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	/* NB: can't just pass raw "base + set" pointer to em_sigaddset
+	   because that pointer may not be aligned correctly */
+	(void) em_sigaddset(&set_v, signum);
+
+	for (i = 0; i < ARRAY_LEN(set_v.__bits); ++i) {
+		set_v.__bits[i] = uint32_t_swap_bytes(set_v.__bits[i]);
+	}
+
+	memcpy(base + set, &set_v, sizeof(set_v));
+	return 0;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
