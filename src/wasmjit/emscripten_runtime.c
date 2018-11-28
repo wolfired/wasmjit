@@ -7810,6 +7810,26 @@ uint32_t wasmjit_emscripten__sigaddset(uint32_t set,
 	return 0;
 }
 
+uint32_t wasmjit_emscripten__sigemptyset(uint32_t set,
+					 struct FuncInst *funcinst)
+{
+	em_sigset_t set_v;
+	char *base;
+
+	if (_wasmjit_emscripten_check_range(funcinst, set, sizeof(set_v))) {
+		return 0;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	/* NB: can't just pass raw "base + set" pointer to em_sigaddset
+	   because that pointer may not be aligned correctly */
+	(void) em_sigemptyset(&set_v);
+
+	memcpy(base + set, &set_v, sizeof(set_v));
+	return 0;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
