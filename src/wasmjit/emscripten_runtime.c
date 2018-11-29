@@ -2072,7 +2072,7 @@ struct em_ucred {
 };
 
 struct em_timeval {
-	uint32_t tv_sec, tv_usec;
+	int32_t tv_sec, tv_usec;
 };
 
 struct em_timezone {
@@ -2112,7 +2112,7 @@ typedef int32_t em_off_t;
 typedef uint32_t em_blksize_t;
 typedef uint32_t em_blkcnt_t;
 typedef uint32_t em_ino_t;
-typedef uint32_t em_time_t;
+typedef int32_t em_time_t;
 typedef uint16_t em_unsigned_short;
 typedef uint8_t em_unsigned_char;
 typedef uint32_t em_unsigned_long;
