@@ -241,6 +241,8 @@ typedef struct stat sys_stat_t;
 
 #endif
 
+#define sys_sigprocmask(how, nset, oset) (sys_rt_sigprocmask((how), (nset), (oset), sizeof(sigset_t)))
+
 #else
 
 typedef struct stat sys_stat_t;

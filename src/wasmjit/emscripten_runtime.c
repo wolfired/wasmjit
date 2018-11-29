@@ -7386,24 +7386,6 @@ uint32_t wasmjit_emscripten__setitimer(uint32_t which,
 #undef PASSTHROUGH
 }
 
-#ifdef __KERNEL__
-
-uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
-				       uint32_t act,
-				       uint32_t oldact,
-				       struct FuncInst *funcinst)
-{
-	(void) signum;
-	(void) act;
-	(void) oldact;
-	(void) funcinst;
-	/* TODO: implement */
-	wasmjit_emscripten____setErrNo(EM_ENOSYS, funcinst);
-	return -1;
-}
-
-#else
-
 #define _EM_NSIG (sizeof(em_sigset_t) * CHAR_BIT + 1)
 
 static int em_sigaddset(em_sigset_t *set, em_int sig)
@@ -7468,6 +7450,62 @@ static em_int back_convert_signal(int signo)
 	default: return -1;
 	}
 }
+
+static void swap_sigset(em_sigset_t *set)
+{
+	size_t i;
+	for (i = 0; i < ARRAY_LEN(set->__bits); ++i) {
+		set->__bits[i] = uint32_t_swap_bytes(set->__bits[i]);
+	}
+}
+
+static void convert_sigset(sigset_t *dst, em_sigset_t *src)
+{
+	int32_t signo;
+	sigemptyset(dst);
+	for (signo = 1; (size_t) signo < sizeof(*src) * CHAR_BIT; ++signo) {
+		if (em_sigismember(src, signo)) {
+			int sys_signo = convert_signal(signo);
+			/* Nb: if the signal doesn't exist on the host system
+			   we don't have to mask it */
+			if (sys_signo >= 0) {
+					sigaddset(dst, sys_signo);
+			}
+		}
+	}
+}
+
+static void back_convert_sigset(em_sigset_t *dst, sigset_t *src)
+{
+	int i;
+	em_sigemptyset(dst);
+	for (i = 1; (size_t) i < sizeof(*src) * CHAR_BIT; ++i) {
+		if (sigismember(src, i)) {
+			int32_t signo = back_convert_signal(i);
+			if (signo >= 0) {
+				em_sigaddset(dst, signo);
+			}
+		}
+	}
+}
+
+#ifdef __KERNEL__
+
+uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
+				       uint32_t act,
+				       uint32_t oldact,
+				       struct FuncInst *funcinst)
+{
+	(void) signum;
+	(void) act;
+	(void) oldact;
+	(void) funcinst;
+	/* TODO: implement */
+	wasmjit_emscripten____setErrNo(EM_ENOSYS, funcinst);
+	return -1;
+}
+
+#else
 
 #define EM_SA_NOCLDSTOP  1
 #define EM_SA_NOCLDWAIT  2
@@ -7608,7 +7646,6 @@ uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
 	struct sigaction sys_act_v, sys_oldact_v,
 		*sys_act, *sys_oldact;
 	struct em_sigaction act_v;
-	size_t i;
 	int32_t ret;
 
 	if ((act &&
@@ -7628,9 +7665,7 @@ uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
 			goto err;
 		}
 
-		for (i = 0; i < ARRAY_LEN(act_v.sa_mask.__bits); ++i) {
-			act_v.sa_mask.__bits[i] = uint32_t_swap_bytes(act_v.sa_mask.__bits[i]);
-		}
+		swap_sigset(&act_v.sa_mask);
 
 		act_v.sa_flags = uint32_t_swap_bytes(act_v.sa_flags);
 		if (act_v.sa_flags & EM_SA_SIGINFO) {
@@ -7649,8 +7684,6 @@ uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
 	}
 
 	if (act) {
-		em_int signo;
-
 		/* convert sa_flags */
 		if (!check_sa_flags(act_v.sa_flags)) {
 			errno = EINVAL;
@@ -7676,17 +7709,7 @@ uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
 		}
 
 		/* convert sa_mask */
-		sigemptyset(&sys_act_v.sa_mask);
-		for (signo = 1; (size_t) signo < sizeof(act_v.sa_mask) * CHAR_BIT; ++signo) {
-			if (em_sigismember(&act_v.sa_mask, signo)) {
-				int sys_signo = convert_signal(signo);
-				/* Nb: if the signal doesn't exist on the host system
-				   we don't have to mask it */
-				if (sys_signo >= 0) {
-					sigaddset(&sys_act_v.sa_mask, sys_signo);
-				}
-			}
-		}
+		convert_sigset(&sys_act_v.sa_mask, &act_v.sa_mask);
 
 		sys_act = &sys_act_v;
 	} else {
@@ -7707,15 +7730,7 @@ uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
 			_wasmjit_emscripten_get_context(funcinst);
 
 		if (sys_oldact) {
-			em_sigemptyset(&oldact_v.sa_mask);
-			for (i = 1; i < sizeof(sys_oldact_v.sa_mask) * CHAR_BIT; ++i) {
-				if (sigismember(&sys_oldact_v.sa_mask, i)) {
-					int32_t signo = back_convert_signal(i);
-					if (signo >= 0) {
-						em_sigaddset(&oldact_v.sa_mask, signo);
-					}
-				}
-			}
+			back_convert_sigset(&oldact_v.sa_mask, &sys_oldact_v.sa_mask);
 
 			oldact_v.sa_flags = back_convert_sa_flags(sys_oldact_v.sa_flags);
 
@@ -7742,9 +7757,7 @@ uint32_t wasmjit_emscripten__sigaction(uint32_t signum,
 
 			oldact_v.sa_flags = uint32_t_swap_bytes(oldact_v.sa_flags);
 
-			for (i = 0; i < ARRAY_LEN(oldact_v.sa_mask.__bits); ++i) {
-				oldact_v.sa_mask.__bits[i] = uint32_t_swap_bytes(oldact_v.sa_mask.__bits[i]);
-			}
+			swap_sigset(&oldact_v.sa_mask);
 
 			memcpy(base + oldact, &oldact_v, sizeof(oldact_v));
 		}
@@ -7828,6 +7841,87 @@ uint32_t wasmjit_emscripten__sigemptyset(uint32_t set,
 
 	memcpy(base + set, &set_v, sizeof(set_v));
 	return 0;
+}
+
+#define EM_SIG_BLOCK 0
+#define EM_SIG_UNBLOCK 1
+#define EM_SIG_SETMASK 2
+
+uint32_t wasmjit_emscripten__sigprocmask(uint32_t how,
+					 uint32_t set,
+					 uint32_t oset,
+					 struct FuncInst *funcinst)
+{
+	long rret;
+	uint32_t ret;
+	int sys_how;
+	em_sigset_t set_v;
+	sigset_t sys_set_v, sys_oset_v, *sys_set, *sys_oset;
+
+	switch (how) {
+	case EM_SIG_BLOCK: sys_how = SIG_BLOCK; break;
+	case EM_SIG_UNBLOCK: sys_how = SIG_UNBLOCK; break;
+	case EM_SIG_SETMASK: sys_how = SIG_SETMASK; break;
+	default:
+		errno = EINVAL;
+		goto err;
+	}
+
+	if (set) {
+		if (_wasmjit_emscripten_copy_from_user(funcinst, &set_v, set, sizeof(set_v))) {
+			errno = EFAULT;
+			goto err;
+		}
+
+		swap_sigset(&set_v);
+
+		convert_sigset(&sys_set_v, &set_v);
+
+		sys_set = &sys_set_v;
+	} else {
+		sys_set = NULL;
+	}
+
+	if (oset) {
+		if (!_wasmjit_emscripten_check_range(funcinst, oset, sizeof(set_v))) {
+			errno = EFAULT;
+			goto err;
+		}
+
+		sys_oset = &sys_oset_v;
+	} else {
+		sys_oset = NULL;
+	}
+
+	rret = sys_sigprocmask(sys_how, sys_set, sys_oset);
+	if (rret < 0) {
+		errno = -rret;
+		goto err;
+	}
+
+	if (sys_oset) {
+		em_sigset_t oset_v;
+		char *base;
+
+		assert(oset);
+
+		back_convert_sigset(&oset_v, sys_oset);
+
+		swap_sigset(&oset_v);
+
+		base = wasmjit_emscripten_get_base_address(funcinst);
+		memcpy(base + oset, &oset_v, sizeof(oset_v));
+	}
+
+	ret = 0;
+
+	if (0) {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = (int32_t) -1;
+	}
+
+	return ret;
 }
 
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
