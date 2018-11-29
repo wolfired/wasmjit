@@ -7924,6 +7924,40 @@ uint32_t wasmjit_emscripten__sigprocmask(uint32_t how,
 	return ret;
 }
 
+uint32_t wasmjit_emscripten__sigsuspend(uint32_t set,
+					struct FuncInst *funcinst)
+{
+	em_sigset_t set_v;
+	sigset_t sys_set_v;
+	long rret;
+	uint32_t ret;
+
+	if (_wasmjit_emscripten_copy_from_user(funcinst, &set_v, set, sizeof(set_v))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	swap_sigset(&set_v);
+
+	convert_sigset(&sys_set_v, &set_v);
+
+	rret = sys_sigsuspend(&sys_set_v);
+	if (rret < 0) {
+		errno = -rret;
+		goto err;
+	}
+
+	ret = 0;
+
+	if (0) {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = (int32_t) -1;
+	}
+
+	return ret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */

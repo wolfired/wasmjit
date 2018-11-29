@@ -242,6 +242,7 @@ typedef struct stat sys_stat_t;
 #endif
 
 #define sys_sigprocmask(how, nset, oset) (sys_rt_sigprocmask((how), (nset), (oset), sizeof(sigset_t)))
+#define sys_sigsuspend(nset) (sys_rt_sigsuspend((nset), sizeof(sigset_t)))
 
 #else
 
