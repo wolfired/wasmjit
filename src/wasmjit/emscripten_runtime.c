@@ -2245,12 +2245,12 @@ static size_t read_timeval(struct FuncInst *funcinst,
 	wasm_timeval_optval.tv_usec =
 		uint32_t_swap_bytes(wasm_timeval_optval.tv_usec);
 
-	if ((4 > sizeof(tv->tv_sec) &&
-	     (wasm_timeval_optval.tv_sec > SINT_MAX_N(sizeof(tv->tv_sec)) ||
-	      wasm_timeval_optval.tv_sec < SINT_MIN_N(sizeof(tv->tv_sec)))) ||
-	    (4 > sizeof(tv->tv_usec) &&
-	     (wasm_timeval_optval.tv_usec > SINT_MAX_N(sizeof(tv->tv_usec)) ||
-	      wasm_timeval_optval.tv_usec < SINT_MIN_N(sizeof(tv->tv_usec)))))
+	if ((sizeof(wasm_timeval_optval.tv_sec) > sizeof(tv->tv_sec) &&
+	     (wasm_timeval_optval.tv_sec > (int32_t) SINT_MAX_N(sizeof(tv->tv_sec)) ||
+	      wasm_timeval_optval.tv_sec < (int32_t) SINT_MIN_N(sizeof(tv->tv_sec)))) ||
+	    (sizeof(wasm_timeval_optval.tv_usec) > sizeof(tv->tv_usec) &&
+	     (wasm_timeval_optval.tv_usec > (int32_t) SINT_MAX_N(sizeof(tv->tv_usec)) ||
+	      wasm_timeval_optval.tv_usec < (int32_t) SINT_MIN_N(sizeof(tv->tv_usec)))))
 		return 0;
 
 	tv->tv_sec = wasm_timeval_optval.tv_sec;
