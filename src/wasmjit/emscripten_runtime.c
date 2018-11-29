@@ -5811,7 +5811,7 @@ struct passwd *getpwnam(const char *name)
 
 typedef long time_t;
 
-struct tm {
+typedef struct {
 	int tm_sec;
 	int tm_min;
 	int tm_hour;
@@ -5823,9 +5823,9 @@ struct tm {
 	int tm_isdst;
 	long tm_gmtoff;
 	char *tm_zone;
-};
+} user_tm;
 
-struct tm *gmtime_r(const time_t *clock, struct tm *result)
+user_tm *gmtime_r(const time_t *clock, user_tm *result)
 {
 	(void) clock;
 	(void) result;
@@ -5839,7 +5839,7 @@ time_t time(time_t *tmloc)
 	return (time_t) -1;
 }
 
-struct tm *localtime_r(const time_t *clock, struct tm *result)
+user_tm *localtime_r(const time_t *clock, user_tm *result)
 {
 	(void) clock;
 	(void) result;
@@ -5847,7 +5847,7 @@ struct tm *localtime_r(const time_t *clock, struct tm *result)
 	return NULL;
 }
 
-time_t mktime(struct tm *timeptr)
+time_t user_mktime(user_tm *timeptr)
 {
 	return (time_t) -1;
 }
@@ -5909,7 +5909,9 @@ int sigismember(sigset_t *set, int sig)
 	return -1;
 }
 
-#elif __APPLE__
+#else
+
+#if __APPLE__
 
 int sem_init(sem_t *sem, int pshared, unsigned int value)
 {
@@ -5935,6 +5937,15 @@ int sem_wait(sem_t *sem)
 	(void) sem;
 	errno = ENOSYS;
 	return -1;
+}
+
+#endif
+
+typedef struct tm user_tm;
+
+time_t user_mktime(user_tm *timeptr)
+{
+	return mktime(timeptr);
 }
 
 #endif
@@ -6716,7 +6727,7 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
 	return ret;
 }
 
-static uint32_t time_exploder(struct tm *(*exploder)(const time_t *, struct tm *),
+static uint32_t time_exploder(user_tm *(*exploder)(const time_t *, user_tm *),
 			      uint32_t timePtr,
 			      uint32_t tmPtr,
 			      struct FuncInst *funcinst)
@@ -6724,7 +6735,7 @@ static uint32_t time_exploder(struct tm *(*exploder)(const time_t *, struct tm *
 	char *base;
 	em_time_t em_time;
 	time_t time_;
-	struct tm tm_, *sys_tmPtr;
+	user_tm tm_, *sys_tmPtr;
 	struct em_tm em_tm_;
 	wasmjit_signal_block_ctx set;
 	uint32_t ret;
@@ -7011,7 +7022,7 @@ uint32_t wasmjit_emscripten__mktime(uint32_t tmPtr,
 				    struct FuncInst *funcinst)
 {
 	struct em_tm emtm;
-	struct tm tm;
+	user_tm tm;
 	time_t toret;
 	wasmjit_signal_block_ctx set;
 
@@ -7036,7 +7047,7 @@ uint32_t wasmjit_emscripten__mktime(uint32_t tmPtr,
 	p(gmtoff);
 
 	_wasmjit_block_signals(&set);
-	toret = mktime(&tm);
+	toret = user_mktime(&tm);
 	_wasmjit_unblock_signals(&set);
 
 	if (OVERFLOWS(toret)) {
