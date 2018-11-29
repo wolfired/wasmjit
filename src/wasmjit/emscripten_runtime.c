@@ -2516,13 +2516,10 @@ static long copy_cmsg(struct FuncInst *funcinst,
 		      uint32_t controllen,
 		      user_msghdr_t *msg)
 {
-	char *base;
 	uint32_t controlptr;
 	uint32_t controlmax;
 	cmsg_len_t buf_offset;
 	struct cmsghdr *cmsg;
-
-	base = wasmjit_emscripten_get_base_address(funcinst);
 
 	/* control and controllen are user-controlled,
 	   check for overflow */
