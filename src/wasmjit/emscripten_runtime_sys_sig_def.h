@@ -50,9 +50,10 @@ SIG(XFSZ, 25)
 SIG(VTALRM, 26)
 SIG(PROF, 27)
 SIG(WINCH, 28)
-SIG(IO, 29)
-#ifdef SIGPOLL
+#if defined(SIGPOLL)
 SIG(POLL, 29)
+#elif defined(SIGIO)
+SIG(IO, 29)
 #endif
 #ifdef SIGPWR
 SIG(PWR, 30)
