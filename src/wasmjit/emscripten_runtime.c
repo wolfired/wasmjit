@@ -1041,7 +1041,9 @@ uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct
 
 	closedret = sys_close(args.fd);
 
+#if !IS_LINUX
  out:
+#endif
 	_wasmjit_unblock_signals(&set);
 
 	return check_ret(closedret);
