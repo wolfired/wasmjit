@@ -47,6 +47,12 @@
 #define IS_LINUX 0
 #endif
 
+#if defined(__KERNEL__)
+#define RESTRICT_ATTR
+#else
+#define RESTRICT_ATTR restrict
+#endif
+
 #define STATIC_ASSERT(COND,MSG) typedef char static_assertion_##MSG[(COND)?1:-1]
 #define COMPILE_TIME_ASSERT3(X,L) STATIC_ASSERT(X,static_assertion_at_line_##L)
 #define COMPILE_TIME_ASSERT2(X,L) COMPILE_TIME_ASSERT3(X,L)
@@ -213,8 +219,8 @@ static size_t wasmjit_emscripten_copy_to_user(struct MemInst *meminst,
 	return 0;
 }
 
-static void wasmjit_memcpy_from_user(struct MemInst *restrict meminst,
-				     void *restrict dest,
+static void wasmjit_memcpy_from_user(struct MemInst *RESTRICT_ATTR meminst,
+				     void *RESTRICT_ATTR dest,
 				     uint32_t user_src_ptr,
 				     size_t src_size)
 {
