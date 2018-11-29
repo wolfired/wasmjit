@@ -5892,6 +5892,16 @@ void setgrent(void)
 	return;
 }
 
+size_t strftime(char *RESTRICT_ATTR s, size_t maxsize, const char *RESTRICT_ATTR format,
+		const user_tm *RESTRICT_ATTR timeptr)
+{
+	(void) s;
+	(void) maxsize;
+	(void) format;
+	(void) timeptr;
+	return 0;
+}
+
 int sigemptyset(sigset_t *set)
 {
 	/* TODO: implement */
@@ -7970,6 +7980,64 @@ uint32_t wasmjit_emscripten__sigsuspend(uint32_t set,
 	err:
 		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
 		ret = (int32_t) -1;
+	}
+
+	return ret;
+}
+
+uint32_t wasmjit_emscripten__strftime(uint32_t s,
+				      uint32_t maxsize,
+				      uint32_t format,
+				      uint32_t tm,
+				      struct FuncInst *funcinst)
+{
+	uint32_t ret;
+	char *base;
+	user_tm tmtm;
+	struct em_tm em_tm;
+	wasmjit_signal_block_ctx set;
+
+	if (!_wasmjit_emscripten_check_range(funcinst, s, maxsize)) {
+		goto err;
+	}
+
+	if (!_wasmjit_emscripten_check_string(funcinst, format, 4096)) {
+		goto err;
+	}
+
+	if (_wasmjit_emscripten_copy_from_user(funcinst, &em_tm, tm, sizeof(em_tm))) {
+		goto err;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+#define p(n)								\
+	if (OVERFLOWSN(em_tm.tm_ ## n, sizeof(tmtm.tm_ ## n))) {	\
+		goto err;						\
+	}								\
+	tmtm.tm_ ## n = int32_t_swap_bytes(em_tm.tm_ ## n)
+
+	p(sec);
+	p(min);
+	p(hour);
+	p(mday);
+	p(mon);
+	p(year);
+	p(wday);
+	p(yday);
+	p(isdst);
+	p(gmtoff);
+
+#undef p
+
+	/* can't return string longer than maxsize */
+	_wasmjit_block_signals(&set);
+	ret = strftime(base + s, maxsize, base + format, &tmtm);
+	_wasmjit_unblock_signals(&set);
+
+	if (0) {
+	err:
+		ret = 0;
 	}
 
 	return ret;
