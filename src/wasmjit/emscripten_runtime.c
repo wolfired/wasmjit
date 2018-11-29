@@ -7418,7 +7418,7 @@ static int em_sigaddset(em_sigset_t *set, em_int sig)
 {
 	unsigned s = sig-1;
 	assert(!(s >= _EM_NSIG-1 || sig-32U < 3));
-	set->__bits[s/8/sizeof *set->__bits] |= 1UL<<(s&8*sizeof *set->__bits-1);
+	set->__bits[s/8/sizeof *set->__bits] |= 1UL<<(s&(8*sizeof *set->__bits-1));
 	return 0;
 }
 
@@ -7437,7 +7437,7 @@ static int em_sigismember(const em_sigset_t *set, em_int sig)
 {
 	unsigned s = sig-1;
 	assert(!(s >= _EM_NSIG-1));
-	return !!(set->__bits[s/8/sizeof *set->__bits] & 1UL<<(s&8*sizeof *set->__bits-1));
+	return !!(set->__bits[s/8/sizeof *set->__bits] & 1UL<<(s&(8*sizeof *set->__bits-1)));
 }
 
 static int convert_signal(em_int signum)
