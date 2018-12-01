@@ -1,0 +1,439 @@
+/*
+  Copyright (c) 2018 Rian Hunter et. al, see AUTHORS file.
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+ */
+
+#ifdef _SC_ARG_MAX
+SC(ARG_MAX, 0)
+#endif
+#ifdef _SC_CHILD_MAX
+SC(CHILD_MAX, 1)
+#endif
+#ifdef _SC_CLK_TCK
+SC(CLK_TCK, 2)
+#endif
+#ifdef _SC_NGROUPS_MAX
+SC(NGROUPS_MAX, 3)
+#endif
+#ifdef _SC_OPEN_MAX
+SC(OPEN_MAX, 4)
+#endif
+#ifdef _SC_STREAM_MAX
+SC(STREAM_MAX, 5)
+#endif
+#ifdef _SC_TZNAME_MAX
+SC(TZNAME_MAX, 6)
+#endif
+#ifdef _SC_JOB_CONTROL
+SC(JOB_CONTROL, 7)
+#endif
+#ifdef _SC_SAVED_IDS
+SC(SAVED_IDS, 8)
+#endif
+#ifdef _SC_REALTIME_SIGNALS
+SC(REALTIME_SIGNALS, 9)
+#endif
+#ifdef _SC_PRIORITY_SCHEDULING
+SC(PRIORITY_SCHEDULING, 10)
+#endif
+#ifdef _SC_TIMERS
+SC(TIMERS, 11)
+#endif
+#ifdef _SC_ASYNCHRONOUS_IO
+SC(ASYNCHRONOUS_IO, 12)
+#endif
+#ifdef _SC_PRIORITIZED_IO
+SC(PRIORITIZED_IO, 13)
+#endif
+#ifdef _SC_SYNCHRONIZED_IO
+SC(SYNCHRONIZED_IO, 14)
+#endif
+#ifdef _SC_FSYNC
+SC(FSYNC, 15)
+#endif
+#ifdef _SC_MAPPED_FILES
+SC(MAPPED_FILES, 16)
+#endif
+#ifdef _SC_MEMLOCK
+SC(MEMLOCK, 17)
+#endif
+#ifdef _SC_MEMLOCK_RANGE
+  SC(MEMLOCK_RANGE, 18)
+#endif
+#ifdef _SC_MEMORY_PROTECTION
+SC(MEMORY_PROTECTION, 19)
+#endif
+#ifdef _SC_MESSAGE_PASSING
+SC(MESSAGE_PASSING, 20)
+#endif
+#ifdef _SC_SEMAPHORES
+SC(SEMAPHORES, 21)
+#endif
+#ifdef _SC_SHARED_MEMORY_OBJECTS
+SC(SHARED_MEMORY_OBJECTS, 22)
+#endif
+#ifdef _SC_AIO_LISTIO_MAX
+SC(AIO_LISTIO_MAX, 23)
+#endif
+#ifdef _SC_AIO_MAX
+SC(AIO_MAX, 24)
+#endif
+#ifdef _SC_AIO_PRIO_DELTA_MAX
+SC(AIO_PRIO_DELTA_MAX, 25)
+#endif
+#ifdef _SC_DELAYTIMER_MAX
+SC(DELAYTIMER_MAX, 26)
+#endif
+#ifdef _SC_MQ_OPEN_MAX
+SC(MQ_OPEN_MAX, 27)
+#endif
+#ifdef _SC_MQ_PRIO_MAX
+SC(MQ_PRIO_MAX, 28)
+#endif
+#ifdef _SC_VERSION
+SC(VERSION, 29)
+#endif
+#ifdef _SC_PAGESIZE
+SC(PAGESIZE, 30 /* !! */)
+#endif
+#ifdef _SC_RTSIG_MAX
+SC(RTSIG_MAX, 31)
+#endif
+#ifdef _SC_SEM_NSEMS_MAX
+SC(SEM_NSEMS_MAX, 32)
+#endif
+#ifdef _SC_SEM_VALUE_MAX
+SC(SEM_VALUE_MAX, 33)
+#endif
+#ifdef _SC_SIGQUEUE_MAX
+SC(SIGQUEUE_MAX, 34)
+#endif
+#ifdef _SC_TIMER_MAX
+SC(TIMER_MAX, 35)
+#endif
+#ifdef _SC_BC_BASE_MAX
+SC(BC_BASE_MAX, 36)
+#endif
+#ifdef _SC_BC_DIM_MAX
+SC(BC_DIM_MAX, 37)
+#endif
+#ifdef _SC_BC_SCALE_MAX
+SC(BC_SCALE_MAX, 38)
+#endif
+#ifdef _SC_BC_STRING_MAX
+SC(BC_STRING_MAX, 39)
+#endif
+#ifdef _SC_COLL_WEIGHTS_MAX
+SC(COLL_WEIGHTS_MAX, 40)
+#endif
+#ifdef _SC_EXPR_NEST_MAX
+SC(EXPR_NEST_MAX, 42)
+#endif
+#ifdef _SC_LINE_MAX
+SC(LINE_MAX, 43)
+#endif
+#ifdef _SC_RE_DUP_MAX
+SC(RE_DUP_MAX, 44)
+#endif
+#ifdef _SC_2_VERSION
+SC(2_VERSION, 46)
+#endif
+#ifdef _SC_2_C_BIND
+SC(2_C_BIND, 47)
+#endif
+#ifdef _SC_2_C_DEV
+SC(2_C_DEV, 48)
+#endif
+#ifdef _SC_2_FORT_DEV
+SC(2_FORT_DEV, 49)
+#endif
+#ifdef _SC_2_FORT_RUN
+SC(2_FORT_RUN, 50)
+#endif
+#ifdef _SC_2_SW_DEV
+SC(2_SW_DEV, 51)
+#endif
+#ifdef _SC_2_LOCALEDEF
+SC(2_LOCALEDEF, 52)
+#endif
+#ifdef _SC_IOV_MAX
+SC(IOV_MAX, 60)
+#endif
+#ifdef _SC_THREADS
+SC(THREADS, 67)
+#endif
+#ifdef _SC_THREAD_SAFE_FUNCTIONS
+SC(THREAD_SAFE_FUNCTIONS, 68)
+#endif
+#ifdef _SC_GETGR_R_SIZE_MAX
+SC(GETGR_R_SIZE_MAX, 69)
+#endif
+#ifdef _SC_GETPW_R_SIZE_MAX
+SC(GETPW_R_SIZE_MAX, 70)
+#endif
+#ifdef _SC_LOGIN_NAME_MAX
+SC(LOGIN_NAME_MAX, 71)
+#endif
+#ifdef _SC_TTY_NAME_MAX
+SC(TTY_NAME_MAX, 72)
+#endif
+#ifdef _SC_THREAD_DESTRUCTOR_ITERATIONS
+SC(THREAD_DESTRUCTOR_ITERATIONS, 73)
+#endif
+#ifdef _SC_THREAD_KEYS_MAX
+SC(THREAD_KEYS_MAX, 74)
+#endif
+#ifdef _SC_THREAD_STACK_MIN
+SC(THREAD_STACK_MIN, 75)
+#endif
+#ifdef _SC_THREAD_THREADS_MAX
+SC(THREAD_THREADS_MAX, 76)
+#endif
+#ifdef _SC_THREAD_ATTR_STACKADDR
+SC(THREAD_ATTR_STACKADDR, 77)
+#endif
+#ifdef _SC_THREAD_ATTR_STACKSIZE
+SC(THREAD_ATTR_STACKSIZE, 78)
+#endif
+#ifdef _SC_THREAD_PRIORITY_SCHEDULING
+SC(THREAD_PRIORITY_SCHEDULING, 79)
+#endif
+#ifdef _SC_THREAD_PRIO_INHERIT
+SC(THREAD_PRIO_INHERIT, 80)
+#endif
+#ifdef _SC_THREAD_PRIO_PROTECT
+SC(THREAD_PRIO_PROTECT, 81)
+#endif
+#ifdef _SC_THREAD_PROCESS_SHARED
+SC(THREAD_PROCESS_SHARED, 82)
+#endif
+#ifdef _SC_NPROCESSORS_CONF
+SC(NPROCESSORS_CONF, 83)
+#endif
+#ifdef _SC_NPROCESSORS_ONLN
+SC(NPROCESSORS_ONLN, 84)
+#endif
+#ifdef _SC_PHYS_PAGES
+SC(PHYS_PAGES, 85)
+#endif
+#ifdef _SC_AVPHYS_PAGES
+SC(AVPHYS_PAGES, 86)
+#endif
+#ifdef _SC_ATEXIT_MAX
+SC(ATEXIT_MAX, 87)
+#endif
+#ifdef _SC_PASS_MAX
+SC(PASS_MAX, 88)
+#endif
+#ifdef _SC_XOPEN_VERSION
+SC(XOPEN_VERSION, 89)
+#endif
+#ifdef _SC_XOPEN_XCU_VERSION
+SC(XOPEN_XCU_VERSION, 90)
+#endif
+#ifdef _SC_XOPEN_UNIX
+SC(XOPEN_UNIX, 91)
+#endif
+#ifdef _SC_XOPEN_CRYPT
+SC(XOPEN_CRYPT, 92)
+#endif
+#ifdef _SC_XOPEN_ENH_I18N
+SC(XOPEN_ENH_I18N, 93)
+#endif
+#ifdef _SC_XOPEN_SHM
+SC(XOPEN_SHM, 94)
+#endif
+#ifdef _SC_2_CHAR_TERM
+SC(2_CHAR_TERM, 95)
+#endif
+#ifdef _SC_2_UPE
+SC(2_UPE, 97)
+#endif
+#ifdef _SC_XOPEN_XPG2
+SC(XOPEN_XPG2, 98)
+#endif
+#ifdef _SC_XOPEN_XPG3
+SC(XOPEN_XPG3, 99)
+#endif
+#ifdef _SC_XOPEN_XPG4
+SC(XOPEN_XPG4, 100)
+#endif
+#ifdef _SC_NZERO
+SC(NZERO, 109)
+#endif
+#ifdef _SC_XBS5_ILP32_OFF32
+SC(XBS5_ILP32_OFF32, 125)
+#endif
+#ifdef _SC_XBS5_ILP32_OFFBIG
+SC(XBS5_ILP32_OFFBIG, 126)
+#endif
+#ifdef _SC_XBS5_LP64_OFF64
+SC(XBS5_LP64_OFF64, 127)
+#endif
+#ifdef _SC_XBS5_LPBIG_OFFBIG
+SC(XBS5_LPBIG_OFFBIG, 128)
+#endif
+#ifdef _SC_XOPEN_LEGACY
+SC(XOPEN_LEGACY, 129)
+#endif
+#ifdef _SC_XOPEN_REALTIME
+SC(XOPEN_REALTIME, 130)
+#endif
+#ifdef _SC_XOPEN_REALTIME_THREADS
+SC(XOPEN_REALTIME_THREADS, 131)
+#endif
+#ifdef _SC_ADVISORY_INFO
+SC(ADVISORY_INFO, 132)
+#endif
+#ifdef _SC_BARRIERS
+SC(BARRIERS, 133)
+#endif
+#ifdef _SC_CLOCK_SELECTION
+SC(CLOCK_SELECTION, 137)
+#endif
+#ifdef _SC_CPUTIME
+SC(CPUTIME, 138)
+#endif
+#ifdef _SC_THREAD_CPUTIME
+SC(THREAD_CPUTIME, 139)
+#endif
+#ifdef _SC_MONOTONIC_CLOCK
+SC(MONOTONIC_CLOCK, 149)
+#endif
+#ifdef _SC_READER_WRITER_LOCKS
+SC(READER_WRITER_LOCKS, 153)
+#endif
+#ifdef _SC_SPIN_LOCKS
+SC(SPIN_LOCKS, 154)
+#endif
+#ifdef _SC_REGEXP
+SC(REGEXP, 155)
+#endif
+#ifdef _SC_SHELL
+SC(SHELL, 157)
+#endif
+#ifdef _SC_SPAWN
+SC(SPAWN, 159)
+#endif
+#ifdef _SC_SPORADIC_SERVER
+SC(SPORADIC_SERVER, 160)
+#endif
+#ifdef _SC_THREAD_SPORADIC_SERVER
+SC(THREAD_SPORADIC_SERVER, 161)
+#endif
+#ifdef _SC_TIMEOUTS
+SC(TIMEOUTS, 164)
+#endif
+#ifdef _SC_TYPED_MEMORY_OBJECTS
+SC(TYPED_MEMORY_OBJECTS, 165)
+#endif
+#ifdef _SC_2_PBS
+SC(2_PBS, 168)
+#endif
+#ifdef _SC_2_PBS_ACCOUNTING
+SC(2_PBS_ACCOUNTING, 169)
+#endif
+#ifdef _SC_2_PBS_LOCATE
+SC(2_PBS_LOCATE, 170)
+#endif
+#ifdef _SC_2_PBS_MESSAGE
+SC(2_PBS_MESSAGE, 171)
+#endif
+#ifdef _SC_2_PBS_TRACK
+SC(2_PBS_TRACK, 172)
+#endif
+#ifdef _SC_SYMLOOP_MAX
+SC(SYMLOOP_MAX, 173)
+#endif
+#ifdef _SC_STREAMS
+SC(STREAMS, 174)
+#endif
+#ifdef _SC_2_PBS_CHECKPOINT
+SC(2_PBS_CHECKPOINT, 175)
+#endif
+#ifdef _SC_V6_ILP32_OFF32
+SC(V6_ILP32_OFF32, 176)
+#endif
+#ifdef _SC_V6_ILP32_OFFBIG
+SC(V6_ILP32_OFFBIG, 177)
+#endif
+#ifdef _SC_V6_LP64_OFF64
+SC(V6_LP64_OFF64, 178)
+#endif
+#ifdef _SC_V6_LPBIG_OFFBIG
+SC(V6_LPBIG_OFFBIG, 179)
+#endif
+#ifdef _SC_HOST_NAME_MAX
+SC(HOST_NAME_MAX, 180)
+#endif
+#ifdef _SC_TRACE
+SC(TRACE, 181)
+#endif
+#ifdef _SC_TRACE_EVENT_FILTER
+SC(TRACE_EVENT_FILTER, 182)
+#endif
+#ifdef _SC_TRACE_INHERIT
+SC(TRACE_INHERIT, 183)
+#endif
+#ifdef _SC_TRACE_LOG
+SC(TRACE_LOG, 184)
+#endif
+#ifdef _SC_IPV6
+SC(IPV6, 235)
+#endif
+#ifdef _SC_RAW_SOCKETS
+SC(RAW_SOCKETS, 236)
+#endif
+#ifdef _SC_V7_ILP32_OFF32
+SC(V7_ILP32_OFF32, 237)
+#endif
+#ifdef _SC_V7_ILP32_OFFBIG
+SC(V7_ILP32_OFFBIG, 238)
+#endif
+#ifdef _SC_V7_LP64_OFF64
+SC(V7_LP64_OFF64, 239)
+#endif
+#ifdef _SC_V7_LPBIG_OFFBIG
+SC(V7_LPBIG_OFFBIG, 240)
+#endif
+#ifdef _SC_SS_REPL_MAX
+SC(SS_REPL_MAX, 241)
+#endif
+#ifdef _SC_TRACE_EVENT_NAME_MAX
+SC(TRACE_EVENT_NAME_MAX, 242)
+#endif
+#ifdef _SC_TRACE_NAME_MAX
+SC(TRACE_NAME_MAX, 243)
+#endif
+#ifdef _SC_TRACE_SYS_MAX
+SC(TRACE_SYS_MAX, 244)
+#endif
+#ifdef _SC_TRACE_USER_EVENT_MAX
+SC(TRACE_USER_EVENT_MAX, 245)
+#endif
+#ifdef _SC_XOPEN_STREAMS
+SC(XOPEN_STREAMS, 246)
+#endif
+#ifdef _SC_THREAD_ROBUST_PRIO_INHERIT
+SC(THREAD_ROBUST_PRIO_INHERIT, 247)
+#endif
+#ifdef _SC_THREAD_ROBUST_PRIO_PROTECT
+SC(THREAD_ROBUST_PRIO_PROTECT, 248)
+#endif

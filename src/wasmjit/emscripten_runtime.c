@@ -5924,6 +5924,13 @@ int sigismember(sigset_t *set, int sig)
 	return -1;
 }
 
+long sysconf(int name)
+{
+	(void) name;
+	errno = EINVAL;
+	return -1;
+}
+
 #else
 
 #if __APPLE__
@@ -8037,6 +8044,47 @@ uint32_t wasmjit_emscripten__strftime(uint32_t s,
 	if (0) {
 	err:
 		ret = 0;
+	}
+
+	return ret;
+}
+
+uint32_t wasmjit_emscripten__sysconf(uint32_t name,
+				     struct FuncInst *funcinst)
+{
+	int32_t ret;
+	wasmjit_signal_block_ctx set;
+	long retl;
+	int sys_name;
+
+	switch (name) {
+#define SC(NAME, NUM) case NUM: sys_name = _SC_ ## NAME; break;
+#include <wasmjit/emscripten_runtime_sys_sc_def.h>
+#undef SC
+	default: errno = EINVAL; goto err;
+	}
+
+	_wasmjit_block_signals(&set);
+	retl = sysconf(sys_name);
+	_wasmjit_unblock_signals(&set);
+
+	if (retl < 0) {
+		goto err;
+	}
+
+	if (sizeof(retl) > sizeof(ret) &&
+	    (retl > (long) SINT_MAX_N(sizeof(ret)) ||
+	     retl < (long) SINT_MIN_N(sizeof(ret)))) {
+		errno = EOVERFLOW;
+		goto err;
+	}
+
+	ret = retl;
+
+	if (0) {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = -1;
 	}
 
 	return ret;
