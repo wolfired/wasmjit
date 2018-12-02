@@ -8090,6 +8090,35 @@ uint32_t wasmjit_emscripten__sysconf(uint32_t name,
 	return ret;
 }
 
+uint32_t wasmjit_emscripten__usleep(uint32_t useconds,
+				    struct FuncInst *funcinst)
+{
+	long rret;
+	struct timeval tv;
+	int32_t ret;
+
+	tv.tv_sec = 0;
+	tv.tv_usec = useconds;
+
+	/* NB: we use select() instead of usleep()/nanosleep() because
+	   select() is async signal safe */
+	rret = sys_select(0, NULL, NULL, NULL, &tv);
+	if (rret < 0) {
+		errno = -rret;
+		goto err;
+	}
+
+	ret = 0;
+
+	if (0) {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = -1;
+	}
+
+	return ret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
