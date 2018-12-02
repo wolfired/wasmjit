@@ -8119,6 +8119,53 @@ uint32_t wasmjit_emscripten__usleep(uint32_t useconds,
 	return ret;
 }
 
+uint32_t wasmjit_emscripten__utimes(uint32_t path, uint32_t times,
+				    struct FuncInst *funcinst)
+{
+	char *base;
+	long rret;
+	int32_t ret;
+	struct timeval sys_times[2];
+
+	if (!_wasmjit_emscripten_check_string(funcinst, path, PATH_MAX)) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	if (!_wasmjit_emscripten_check_range(funcinst, times,
+					     2 * sizeof(struct em_timeval))) {
+		errno = EFAULT;
+		goto err;
+	}
+
+	if (!read_timeval(funcinst, &sys_times[0], times)) {
+		errno = EOVERFLOW;
+		goto err;
+	}
+
+	if (!read_timeval(funcinst, &sys_times[1], times + sizeof(struct em_timeval))) {
+		errno = EOVERFLOW;
+		goto err;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+	rret = sys_utimes(base + path, sys_times);
+	if (rret < 0) {
+		errno = -rret;
+		goto err;
+	}
+
+	ret = 0;
+
+	if (0) {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = -1;
+	}
+
+	return ret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */
