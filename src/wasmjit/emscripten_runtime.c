@@ -8166,6 +8166,147 @@ uint32_t wasmjit_emscripten__utimes(uint32_t path, uint32_t times,
 	return ret;
 }
 
+#define EM_WNOHANG    1
+#define EM_WUNTRACED  2
+#define EM_WCONTINUED 8
+
+int check_waitpid_options(em_int options)
+{
+#if IS_LINUX
+	(void) options;
+	return 1;
+#else
+	em_int all =
+		EM_WNOHANG |
+		EM_WUNTRACED |
+		EM_WCONTINUED |
+		0;
+	return ~(options & ~all);
+#endif
+}
+
+int convert_waitpid_options(em_int options)
+{
+#if IS_LINUX
+	return options;
+#else
+	int sys_options = 0;
+
+#define p(n)					\
+	if (options & EM_W ## n)		\
+		sys_options |= W ## n
+
+	p(NOHANG);
+	p(UNTRACED);
+	p(CONTINUED);
+
+#undef p
+
+	return sys_options;
+#endif
+}
+
+#define _EM_WSTATUS(x)     ((x) & 0177)
+#define _EM_WSTOPPED       0177            /* _WSTATUS if process is stopped */
+#define _EM_WCONTINUED     0177777         /* process has continued */
+#define EM_WIFSTOPPED(x)   (((x) & 0xff) == _EM_WSTOPPED)
+#define EM_WSTOPSIG(x)     (int)(((unsigned)(x) >> 8) & 0xff)
+#define EM_WIFSIGNALED(x)  (_EM_WSTATUS(x) != _EM_WSTOPPED && _EM_WSTATUS(x) != 0)
+#define EM_WTERMSIG(x)     (_EM_WSTATUS(x))
+#define EM_WIFEXITED(x)    (_EM_WSTATUS(x) == 0)
+#define EM_WEXITSTATUS(x)  (int)(((unsigned)(x) >> 8) & 0xff)
+#define EM_WIFCONTINUED(x) (((x) & _EM_WCONTINUED) == _EM_WCONTINUED)
+#define EM_WCOREFLAG       0200
+#define EM_WCOREDUMP(x)    ((x) & EM_WCOREFLAG)
+
+int32_t back_convert_waitpid_status(int status)
+{
+#if IS_LINUX
+	return status;
+#else
+	int32_t em_status = 0;
+
+	if (WIFEXITED(status)) {
+		em_status |= ((uint32_t) WEXITSTATUS(status)) << 8;
+	}
+
+	if (WIFSIGNALED(status)) {
+		em_status |= ((uint32_t) back_convert_signal(WTERMSIG(status))) & 0177;
+
+		if (WCOREDUMP(status)) {
+			em_status |= (uint32_t) EM_WCOREFLAG;
+		}
+	}
+
+	if (WIFSTOPPED(status)) {
+		em_status |= _EM_WSTOPPED;
+		em_status |= ((uint32_t) back_convert_signal(WSTOPSIG(status))) << 8;
+	}
+
+	if (WIFCONTINUED(status)) {
+		em_status = ((uint32_t) em_status) & ~((uint32_t) _EM_WCONTINUED);
+		em_status |= (uint32_t) _EM_WCONTINUED;
+	}
+
+	return em_status;
+#endif
+}
+
+uint32_t wasmjit_emscripten__waitpid(uint32_t pid, uint32_t status, uint32_t options,
+				     struct FuncInst *funcinst)
+{
+	int sys_status_v, *sys_status;
+	int sys_options;
+	long rret;
+	int32_t ret;
+	em_int status_v;
+	char *base;
+
+	if (!check_waitpid_options(options)) {
+		errno = EINVAL;
+		goto err;
+	}
+
+	sys_options = convert_waitpid_options(options);
+
+	if (status) {
+		if (!_wasmjit_emscripten_check_range(funcinst, status,
+						     sizeof(status_v))) {
+			errno = EFAULT;
+			goto err;
+		}
+
+		sys_status = &sys_status_v;
+	} else {
+		sys_status = NULL;
+	}
+
+	rret = sys_waitpid(pid, sys_status, sys_options);
+	if (rret < 0) {
+		errno = -rret;
+		goto err;
+	}
+
+	assert(!!sys_status == !!status);
+
+	if (sys_status) {
+		status_v = back_convert_waitpid_status(*sys_status);
+		status_v = int32_t_swap_bytes(status_v);
+		base = wasmjit_emscripten_get_base_address(funcinst);
+		memcpy(base + status, &status_v, sizeof(status_v));
+	}
+
+	ret = 0;
+
+	if (0) {
+	err:
+		wasmjit_emscripten____setErrNo(convert_errno(errno), funcinst);
+		ret = -1;
+	}
+
+	return ret;
+}
+
 void wasmjit_emscripten_cleanup(struct ModuleInst *moduleinst) {
 	(void)moduleinst;
 	/* TODO: implement */

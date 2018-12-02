@@ -78,6 +78,15 @@ typedef struct statfs64 user_statvfs;
 typedef struct {
 } sem_t;
 
+#define WIFEXITED(_status) (!((_status) & 0x7f))
+#define WEXITSTATUS(_status) (((_status) >> 8) & 0xff)
+#define WIFSIGNALED(_status) (((_status) & 0x7f) && (((_status) & 0x7f) != 0x7f))
+#define WTERMSIG(_status) ((_status) & 0x7f)
+#define WCOREDUMP(_status) ((_status) & 0x80)
+#define WIFSTOPPED(_status) (((_status) & 0x7f) == 0x7f)
+#define WSTOPSIG(_status) (((_status) >> 8) & 0xff)
+#define WIFCONTINUED(_status) (((_status) & 0xffff) == 0xffff)
+
 #else
 
 #include <errno.h>
@@ -98,6 +107,7 @@ typedef struct {
 #include <sys/time.h>
 #include <signal.h>
 #include <pthread.h>
+#include <sys/wait.h>
 
 #ifdef __APPLE__
 
@@ -243,6 +253,8 @@ typedef struct stat sys_stat_t;
 
 #define sys_sigprocmask(how, nset, oset) (sys_rt_sigprocmask((how), (nset), (oset), sizeof(sigset_t)))
 #define sys_sigsuspend(nset) (sys_rt_sigsuspend((nset), sizeof(sigset_t)))
+
+#define sys_waitpid(_pid, _status, _options) (sys_wait4((_pid), (_status), (_options), NULL))
 
 #else
 
