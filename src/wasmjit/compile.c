@@ -1822,7 +1822,8 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 		break;
 	}
 	case OPCODE_F64_EQ:
-	case OPCODE_F64_NE: {
+	case OPCODE_F64_NE:
+	case OPCODE_F64_LT: {
 		assert(peek_stack(sstack) == STACK_F64);
 		pop_stack(sstack);
 
@@ -1846,10 +1847,15 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 			OUTS("\xba\x01");
 			OUTB(0); OUTB(0); OUTB(0);
 			break;
+		case OPCODE_F64_LT:
+			break;
 		}
 
 		/* ucomisd (%rsp), %xmm0 */
 		OUTS("\x66\x0f\x2e\x04\x24");
+
+		/* NB: since we put the second operator
+		   first, we need to test the opposite operation */
 
 		switch (instruction->opcode) {
 		case OPCODE_F64_EQ:
@@ -1863,6 +1869,10 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 			OUTS("\x0f\x9a\xc0");
 			/* cmovne %edx, %eax */
 			OUTS("\x0f\x45\xc2");
+			break;
+		case OPCODE_F64_LT:
+			/* seta %al */
+			OUTS("\x0f\x97\xc0");
 			break;
 		}
 
