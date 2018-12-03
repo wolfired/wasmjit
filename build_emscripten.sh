@@ -20,4 +20,4 @@ do
 done
 
 
-cc -o "$1.exe" "$1.o" $SUPPORT_FILES
+cc -o "$1.exe" "$1.o" $SUPPORT_FILES -pthread
