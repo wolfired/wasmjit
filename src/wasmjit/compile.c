@@ -2193,6 +2193,20 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 		if (!push_stack(sstack, STACK_I64))
 			goto error;
 		break;
+	case OPCODE_I64_TRUNC_S_F64:
+		assert(peek_stack(sstack) == STACK_F64);
+		pop_stack(sstack);
+
+		/* cvttsd2si (%rsp),%rax */
+		OUTS("\xf2\x48\x0f\x2c\x04\x24");
+
+		/* mov %rax, (%rsp) */
+		OUTS("\x48\x89\x04\x24");
+
+		if (!push_stack(sstack, STACK_I64))
+			goto error;
+
+		break;
 	case OPCODE_F64_CONVERT_S_I32:
 	case OPCODE_F64_CONVERT_U_I32:
 		assert(peek_stack(sstack) == STACK_I32);
