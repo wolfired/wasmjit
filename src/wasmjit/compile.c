@@ -1849,6 +1849,10 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 			break;
 		case OPCODE_F64_LT:
 			break;
+		default:
+			assert(0);
+			__builtin_unreachable();
+			break;
 		}
 
 		/* ucomisd (%rsp), %xmm0 */
