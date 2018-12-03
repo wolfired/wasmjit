@@ -130,6 +130,13 @@ static void encode_le_uint32_t(uint32_t val, char *buf)
 	}						   \
 	while (0)
 
+#define OUTSN(str, n)					   \
+	do {						   \
+		if (!output_buf(output, str, n))	   \
+			goto error;			   \
+	}						   \
+	while (0)
+
 #define OUTB(b)						   \
 	do {						   \
 		signed char __b;				\
@@ -2194,11 +2201,57 @@ static int wasmjit_compile_instruction(const struct FuncType *func_types,
 			goto error;
 		break;
 	case OPCODE_I64_TRUNC_S_F64:
+	case OPCODE_I64_TRUNC_U_F64:
 		assert(peek_stack(sstack) == STACK_F64);
 		pop_stack(sstack);
 
-		/* cvttsd2si (%rsp),%rax */
-		OUTS("\xf2\x48\x0f\x2c\x04\x24");
+		switch (instruction->opcode) {
+		case OPCODE_I64_TRUNC_S_F64:
+			/* cvttsd2si (%rsp),%rax */
+			OUTS("\xf2\x48\x0f\x2c\x04\x24");
+			break;
+		case OPCODE_I64_TRUNC_U_F64:
+			/* NB: this is INT64_MAX + 1 in double form */
+			/* mov $0x43e0000000000000, %rax */
+			OUTSN("\x48\xb8\x00\x00\x00\x00\x00\x00\xe0\x43", 10);
+
+			/* movq %rax, %xmm1 */
+			OUTS("\x66\x48\x0f\x6e\xc8");
+
+			/* movsd (%rsp), %xmm0 */
+			OUTS("\xf2\x0f\x10\x04\x24");
+
+			/* ucomisd %xmm1, %xmm0 */
+			OUTS("\x66\x0f\x2e\xc1");
+
+			/* jae after1: */
+			OUTS("\x73");
+			OUTB(5 + 2);
+
+			/* cvttsd2si %xmm0, %rax */
+			OUTS("\xf2\x48\x0f\x2c\xc0");
+
+			/* jmp after2 */
+			OUTS("\xeb");
+			OUTB(4 + 5 + 5);
+
+			/* after1: */
+			/* subsd %xmm1, %xmm0 */
+			OUTS("\xf2\x0f\x5c\xc1");
+
+			/* cvttsd2si %xmm0, %rax */
+			OUTS("\xf2\x48\x0f\x2c\xc0");
+
+			/* btc $0x3f, %rax */
+			OUTS("\x48\x0f\xba\xf8\x3f");
+
+			/* after2: */
+			break;
+		default:
+			assert(0);
+			__builtin_unreachable();
+			break;
+		}
 
 		/* mov %rax, (%rsp) */
 		OUTS("\x48\x89\x04\x24");
