@@ -250,6 +250,7 @@ struct EmscriptenContext g_emscripten_ctx;
 
 #include <wasmjit/emscripten_runtime_def.h>
 
+extern struct ModuleInst WASM_MODULE_SYMBOL(asm);
 extern struct FuncInst WASM_FUNC_SYMBOL(asm, _main);
 extern struct FuncInst WASM_FUNC_SYMBOL(asm, stackAlloc);
 extern struct FuncInst WASM_FUNC_SYMBOL(asm, ___errno_location) __attribute__((weak));
