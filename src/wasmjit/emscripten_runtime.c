@@ -3271,15 +3271,15 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 			  uint32_t, addrp,
 			  uint32_t, addrlenp);
 
-		if (_wasmjit_emscripten_copy_from_user(funcinst,
-						       &addrlen,
-						       args.addrlenp,
-						       sizeof(uint32_t)))
-			return -EM_EFAULT;
-
-		addrlen = uint32_t_swap_bytes(addrlen);
-
 		if (args.addrp) {
+			if (_wasmjit_emscripten_copy_from_user(funcinst,
+							       &addrlen,
+							       args.addrlenp,
+							       sizeof(uint32_t)))
+				return -EM_EFAULT;
+
+			addrlen = uint32_t_swap_bytes(addrlen);
+
 			if (!_wasmjit_emscripten_check_range(funcinst,
 							     args.addrp,
 							     addrlen))
@@ -3304,8 +3304,8 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 				      args.len,
 				      flags2,
 				      args.addrp ? base + args.addrp : NULL,
-				      addrlen,
-				      base + args.addrlenp);
+				      args.addrp ? 0 : addrlen,
+				      args.addrp ? base + args.addrlenp : NULL);
 		break;
 	}
 	case 14: { // setsockopt
