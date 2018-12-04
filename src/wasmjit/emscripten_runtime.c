@@ -4763,17 +4763,74 @@ uint32_t wasmjit_emscripten____syscall340(uint32_t which, uint32_t varargs,
 	return ret;
 }
 
+static uint32_t _memalign(struct FuncInst *funcinst,
+			  uint32_t alignment, uint32_t size) {
+	union ValueUnion output, input[2];
+	struct FuncInst *callfuncinst;
+	struct EmscriptenContext *ctx =
+		_wasmjit_emscripten_get_context(funcinst);
+
+	callfuncinst = wasmjit_get_export(ctx->asm_, "_memalign",
+					       IMPORT_DESC_TYPE_FUNC).func;
+	if (!callfuncinst)
+		return 0;
+
+	{
+		struct FuncType functype;
+		wasmjit_valtype_t input_types[] = {VALTYPE_I32, VALTYPE_I32};
+		wasmjit_valtype_t return_types[] = {VALTYPE_I32};
+
+		_wasmjit_create_func_type(&functype,
+					  ARRAY_LEN(input_types), input_types,
+					  ARRAY_LEN(return_types), return_types);
+
+		if (!wasmjit_typecheck_func(&functype, callfuncinst))
+			return 0;
+	}
+
+	input[0].i32 = alignment;
+	input[1].i32 = size;
+
+	if (wasmjit_invoke_function(callfuncinst, input, &output))
+		return 0;
+
+	return output.i32;
+}
+
 /* mmap2 */
 uint32_t wasmjit_emscripten____syscall192(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
+
+	LOAD_ARGS(funcinst, varargs, 6,
+		  uint32_t, addr,
+		  uint32_t, len,
+		  int32_t, prot,
+		  int32_t, flags,
+		  int32_t, fd,
+		  int32_t, off);
+
 	(void)which;
-	(void)varargs;
-	(void)funcinst;
-	/* mmap()'s semantics in a WASM context are currently not clear.
-	   additionally, an in-kernel implementation for file mapping requires
-	   more invasive changes to the kernel. */
-	return -EM_ENOSYS;
+
+	if (args.fd == -1) {
+		char *base;
+		uint32_t ptr;
+
+		ptr = _memalign(funcinst, getpagesize(), args.len);
+		if (!ptr) return -EM_ENOMEM;
+
+		if (!_wasmjit_emscripten_check_range(funcinst, ptr, args.len))
+			return -EM_EFAULT;
+
+		base = wasmjit_emscripten_get_base_address(funcinst);
+		memset(base + ptr, 0, args.len);
+		return ptr;
+	} else {
+		/* mmap()'s semantics in a WASM context are currently not clear.
+		   additionally, an in-kernel implementation for file mapping requires
+		   more invasive changes to the kernel. */
+		return -EM_ENOSYS;
+	}
 }
 
 /* ftruncate64 */
