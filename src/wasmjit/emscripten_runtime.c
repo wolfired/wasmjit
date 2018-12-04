@@ -8486,7 +8486,7 @@ uint32_t wasmjit_emscripten__sigemptyset(uint32_t set,
 	em_sigset_t set_v;
 	char *base;
 
-	if (_wasmjit_emscripten_check_range(funcinst, set, sizeof(set_v))) {
+	if (!_wasmjit_emscripten_check_range(funcinst, set, sizeof(set_v))) {
 		return 0;
 	}
 
