@@ -2212,6 +2212,7 @@ COMPILE_TIME_ASSERT(sizeof(socklen_t) == sizeof(unsigned));
 #define EM_SOL_SOCKET 1
 #define EM_SCM_RIGHTS 1
 #define EM_SCM_CREDENTIALS 2
+#define EM_SOL_TCP 6
 
 enum {
 	OPT_TYPE_INT,
@@ -2243,6 +2244,99 @@ static int convert_sockopt(int32_t level,
 		default: return -1;
 		}
 		*level2 = SOL_SOCKET;
+		break;
+	}
+	case EM_SOL_TCP: {
+		switch (optname) {
+#define TCP(name, value, opt_type) case value: *optname2 = TCP_ ## name; *opttype = OPT_TYPE_ ## opt_type; break
+#ifdef TCP_NODELAY
+			TCP(NODELAY, 1, INT);
+#endif
+#ifdef TCP_MAXSEG
+			TCP(MAXSEG	, 2, INT);
+#endif
+#ifdef TCP_CORK
+			TCP(CORK	, 3, INT);
+#endif
+#ifdef TCP_KEEPIDLE
+			TCP(KEEPIDLE	, 4, INT);
+#endif
+#ifdef TCP_KEEPINTVL
+			TCP(KEEPINTVL	, 5, INT);
+#endif
+#ifdef TCP_KEEPCNT
+			TCP(KEEPCNT	, 6, INT);
+#endif
+#ifdef TCP_SYNCNT
+			TCP(SYNCNT	, 7, INT);
+#endif
+#ifdef TCP_LINGER2
+			TCP(LINGER2	, 8, INT);
+#endif
+#ifdef TCP_DEFER
+			TCP(DEFER_ACCEPT, 9, INT);
+#endif
+#ifdef TCP_WINDOW
+			TCP(WINDOW_CLAMP ,10, INT);
+#endif
+			/* TODO: */
+			/*			TCP(INFO	 ,11, INT); */
+#ifdef TCP_QUICKACK
+			TCP(QUICKACK	 ,12, INT);
+#endif
+#ifdef TCP_CONGESTION
+			TCP(CONGESTION	 ,13, STRING);
+#endif
+#ifdef TCP_MD5SIG
+			TCP(MD5SIG	 ,14, INT);
+#endif
+#ifdef TCP_THIN
+			TCP(THIN_LINEAR_TIMEOUTS ,16, INT);
+#endif
+#ifdef TCP_THIN
+			TCP(THIN_DUPACK  ,17, INT);
+#endif
+#ifdef TCP_USER
+			TCP(USER_TIMEOUT ,18, INT);
+#endif
+#ifdef TCP_REPAIR
+			TCP(REPAIR       ,19, INT);
+#endif
+#ifdef TCP_REPAIR
+			TCP(REPAIR_QUEUE ,20, INT);
+#endif
+#ifdef TCP_QUEUE
+			TCP(QUEUE_SEQ    ,21, INT);
+#endif
+#ifdef TCP_REPAIR
+			TCP(REPAIR_OPTIONS ,22, INT);
+#endif
+#ifdef TCP_FASTOPEN
+			TCP(FASTOPEN     ,23, INT);
+#endif
+#ifdef TCP_TIMESTAMP
+			TCP(TIMESTAMP    ,24, INT);
+#endif
+#ifdef TCP_NOTSENT
+			TCP(NOTSENT_LOWAT ,25, INT);
+#endif
+#ifdef TCP_CC
+			TCP(CC_INFO      ,26, INT);
+#endif
+#ifdef TCP_SAVE
+			TCP(SAVE_SYN     ,27, INT);
+#endif
+#ifdef TCP_SAVED
+			TCP(SAVED_SYN    ,28, INT);
+#endif
+#undef TCP
+		default: return -1;
+		}
+#ifdef SOL_TCP
+		*level2 = SOL_TCP;
+#else
+		*level2 = IPPROTO_TCP;
+#endif
 		break;
 	}
 	default: return -1;

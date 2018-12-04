@@ -108,6 +108,7 @@ typedef struct {
 #include <signal.h>
 #include <pthread.h>
 #include <sys/wait.h>
+#include <netinet/tcp.h>
 
 #ifdef __APPLE__
 
