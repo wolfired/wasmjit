@@ -160,7 +160,6 @@ void wasmjit_trap(int reason)
 __attribute__((noreturn))
 void wasmjit_exit(int status)
 {
-	assert(status);
 	wasmjit_restore_thread_state(*wasmjit_get_jmp_buf(), (WASMJIT_TRAP_EXIT << 8) | status);
 }
 
