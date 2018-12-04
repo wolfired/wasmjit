@@ -462,11 +462,24 @@ int main(int argc, char *argv[])
 	int has_table;
 	size_t tablemin = 0, tablemax = 0;
 	uint32_t static_bump = 0;
+	int argc_options;
+
+	{
+		int i;
+
+		for (i = 1; i < argc; ++i) {
+			if (argv[i][0] != '-') {
+				break;
+			}
+		}
+
+		argc_options = i;
+	}
 
 	dump_module =  0;
 	create_relocatable =  0;
 	create_relocatable_helper =  0;
-	while ((opt = getopt(argc, argv, "dop")) != -1) {
+	while ((opt = getopt(argc_options, argv, "dop")) != -1) {
 		switch (opt) {
 		case 'o':
 			create_relocatable = 1;
@@ -482,12 +495,12 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (optind >= argc) {
+	if (argc_options >= argc) {
 		fprintf(stderr, "Need an input file\n");
 		return -1;
 	}
 
-	filename = argv[optind];
+	filename = argv[argc_options];
 
 	if (dump_module)
 		return dump_wasm_module(filename);
@@ -550,5 +563,5 @@ int main(int argc, char *argv[])
 
 	return run_emscripten_file(filename,
 				   static_bump, has_table, tablemin, tablemax,
-				   argc - optind, &argv[optind], environ);
+				   argc - argc_options, &argv[argc_options], environ);
 }
