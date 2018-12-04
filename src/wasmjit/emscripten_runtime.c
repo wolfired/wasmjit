@@ -2982,16 +2982,18 @@ static long write_cmsg(char *base,
 static long finish_sendmsg(struct FuncInst *funcinst,
 			   int fd, user_msghdr_t *msg, int flags)
 {
-	uint32_t msg_name = (uintptr_t) msg->msg_name;
+	if (msg->msg_name) {
+		uint32_t msg_name = (uintptr_t) msg->msg_name;
 
-	/* host kernel will take care of sanitizing msg_name */
-	if (!_wasmjit_emscripten_check_range(funcinst,
-					     msg_name,
-					     msg->msg_namelen)) {
-		return -EFAULT;
+		/* host kernel will take care of sanitizing msg_name */
+		if (!_wasmjit_emscripten_check_range(funcinst,
+						     msg_name,
+						     msg->msg_namelen)) {
+			return -EFAULT;
+		}
+
+		msg->msg_name = wasmjit_emscripten_get_base_address(funcinst) + msg_name;
 	}
-
-	msg->msg_name = wasmjit_emscripten_get_base_address(funcinst) + msg_name;
 
 	return sys_sendmsg(fd, msg, flags);
 }
