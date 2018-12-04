@@ -100,6 +100,22 @@ static int32_t int32_t_swap_bytes(int32_t a)
 #define LOAD_ARGS(...)				\
 	LOAD_ARGS_CUSTOM(args, __VA_ARGS__)
 
+
+#if defined(__GNUC__)
+#define ISUNSIGNED(a) ((typeof(a))0 - 1 > 0)
+#else
+#define ISUNSIGNED(a) (((a) - (a)) - 1 > 0)
+#endif
+
+#define OVERFLOWSN(a, n) (						\
+	sizeof(a) > n &&						\
+	(ISUNSIGNED(a)							\
+	 ? (a) > UINT_MAX_N(n)						\
+	 : ((a) < SINT_MIN_N(n) || (a) > SINT_MAX_N(n)))		\
+	 )
+
+#define OVERFLOWS(a) OVERFLOWSN((a), 4)
+
 enum {
 #define ERRNO(name, value) EM_ ## name = value,
 #include <wasmjit/emscripten_runtime_sys_errno_def.h>
@@ -3074,6 +3090,44 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 
 		break;
 	}
+	case 8: {
+		int domain, type, protocol;
+		int sv[2];
+		char *base;
+
+		LOAD_ARGS(funcinst, ivargs, 4,
+			  int32_t, domain,
+			  int32_t, type,
+			  int32_t, protocol,
+			  uint32_t, socketret);
+
+		if (!_wasmjit_emscripten_check_range(funcinst, args.socketret,
+						     sizeof(em_int) * 2)) {
+			return -EM_EFAULT;
+		}
+
+		domain = convert_socket_domain_to_local(args.domain);
+		type = convert_socket_type_to_local(args.type);
+		protocol = convert_proto_to_local(domain, args.protocol);
+
+		ret = sys_socketpair(domain, type, protocol, sv);
+		if (ret >= 0) {
+			em_int osv[2];
+
+			if (OVERFLOWSN(sv[0], sizeof(osv[0])) ||
+			    OVERFLOWSN(sv[1], sizeof(osv[1]))) {
+				return -EM_EOVERFLOW;
+			}
+
+			osv[0] = int32_t_swap_bytes(sv[0]);
+			osv[1] = int32_t_swap_bytes(sv[1]);
+
+			base = wasmjit_emscripten_get_base_address(funcinst);
+			memcpy(base + args.socketret, osv, sizeof(em_int) * 2);
+		}
+
+		break;
+	}
 	case 11: { // sendto
 		char *base;
 		int flags2;
@@ -4638,22 +4692,6 @@ uint32_t wasmjit_emscripten____syscall194(uint32_t which, uint32_t varargs,
 
 	return check_ret(sys_ftruncate(args.fd, args.length));
 }
-
-
-#if defined(__GNUC__)
-#define ISUNSIGNED(a) ((typeof(a))0 - 1 > 0)
-#else
-#define ISUNSIGNED(a) (((a) - (a)) - 1 > 0)
-#endif
-
-#define OVERFLOWSN(a, n) (						\
-	sizeof(a) > n &&						\
-	(ISUNSIGNED(a)							\
-	 ? (a) > UINT_MAX_N(n)						\
-	 : ((a) < SINT_MIN_N(n) || (a) > SINT_MAX_N(n)))		\
-	 )
-
-#define OVERFLOWS(a) OVERFLOWSN((a), 4)
 
 static int32_t write_stat(char *base,
 			  uint32_t dest_addr,
