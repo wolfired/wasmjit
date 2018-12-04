@@ -2102,6 +2102,8 @@ struct em_rlimit {
 	uint64_t rlim_max;
 };
 
+typedef int16_t em_short;
+typedef int32_t em_pid_t;
 typedef uint32_t em_dev_t;
 typedef uint32_t em_mode_t;
 typedef uint32_t em_nlink_t;
@@ -3462,20 +3464,451 @@ uint32_t wasmjit_emscripten____syscall102(uint32_t which, uint32_t varargs,
 	return check_ret(ret);
 }
 
+struct em_flock {
+	em_short l_type;
+	em_short l_whence;
+	em_off_t l_start;
+	em_off_t l_len;
+	em_pid_t l_pid;
+};
+
+struct em_f_owner_ex {
+	em_int type;
+	em_pid_t pid;
+};
+
+#define EM_F_DUPFD  0
+#define EM_F_GETFD  1
+#define EM_F_SETFD  2
+#define EM_F_GETFL  3
+#define EM_F_SETFL  4
+
+#define EM_F_SETOWN 8
+#define EM_F_GETOWN 9
+#define EM_F_SETSIG 10
+#define EM_F_GETSIG 11
+
+#define EM_F_GETLK 12
+#define EM_F_SETLK 13
+#define EM_F_SETLKW 14
+
+#define EM_F_SETOWN_EX 15
+#define EM_F_GETOWN_EX 16
+
+#define EM_F_OFD_GETLK 36
+#define EM_F_OFD_SETLK 37
+#define EM_F_OFD_SETLKW 38
+
+#define EM_F_DUPFD_CLOEXEC 1030
+
+#define EM_F_RDLCK 0
+#define EM_F_WRLCK 1
+#define EM_F_UNLCK 2
+
+#define EM_F_SETLEASE	1024
+#define EM_F_GETLEASE	1025
+#define EM_F_NOTIFY	1026
+#define EM_F_CANCELLK	1029
+#define EM_F_SETPIPE_SZ	1031
+#define EM_F_GETPIPE_SZ	1032
+#define EM_F_ADD_SEALS	1033
+#define EM_F_GET_SEALS	1034
+
+#define EM_SEEK_SET 0
+#define EM_SEEK_CUR 1
+#define EM_SEEK_END 2
+
+#define EM_F_OWNER_TID 0
+#define EM_F_OWNER_PID 1
+#define EM_F_OWNER_PGRP 2
+#define EM_F_OWNER_GID 2
+
+#define EM_FD_CLOEXEC 1
+
+int convert_fcntl_cmd(uint32_t cmd)
+{
+	switch (cmd) {
+#define p(n) case EM_F_ ## n: return F_ ## n
+#ifdef F_DUPFD
+		p(DUPFD);
+#endif
+#ifdef F_DUPFD_CLOEXEC
+		p(DUPFD_CLOEXEC);
+#endif
+#ifdef F_GETFD
+		p(GETFD);
+#endif
+#ifdef F_SETFD
+		p(SETFD);
+#endif
+#ifdef F_GETFL
+		p(GETFL);
+#endif
+#ifdef F_SETFL
+		p(SETFL);
+#endif
+#ifdef F_SETLK
+		p(SETLK);
+#endif
+#ifdef F_SETLKW
+		p(SETLKW);
+#endif
+#ifdef F_GETLK
+		p(GETLK);
+#endif
+#ifdef F_OFD_SETLK
+		p(OFD_SETLK);
+#endif
+#ifdef F_OFD_SETLKW
+		p(OFD_SETLKW);
+#endif
+#ifdef F_OFD_GETLK
+		p(OFD_GETLK);
+#endif
+#ifdef F_GETOWN
+		p(GETOWN);
+#endif
+#ifdef F_SETOWN
+		p(SETOWN);
+#endif
+#ifdef F_GETOWN_EX
+		p(GETOWN_EX);
+#endif
+#ifdef F_SETOWN_EX
+		p(SETOWN_EX);
+#endif
+#ifdef F_GETSIG
+		p(GETSIG);
+#endif
+#ifdef F_SETSIG
+		p(SETSIG);
+#endif
+#ifdef F_SETLEASE
+		p(SETLEASE);
+#endif
+#ifdef F_GETLEASE
+		p(GETLEASE);
+#endif
+#ifdef F_NOTIFY
+		p(NOTIFY);
+#endif
+#ifdef F_SETPIPE_SZ
+		p(SETPIPE_SZ);
+#endif
+#ifdef F_GETPIPE_SZ
+		p(GETPIPE_SZ);
+#endif
+	default:
+		return -1;
+#undef p
+	}
+}
+
+static int convert_signal(em_int signum);
+static em_int back_convert_signal(int signo);
+
 /* fcntl64 */
 uint32_t wasmjit_emscripten____syscall221(uint32_t which, uint32_t varargs,
 					  struct FuncInst *funcinst)
 {
+	long rret;
+	int sys_cmd;
+	long sys_arg;
+	int32_t em_arg;
+	struct flock flock_v;
+	struct em_flock em_flock_v;
+#if defined(F_SETOWN_EX) || defined(F_GETOWN_EX)
+	struct f_owner_ex fowner;
+	struct em_f_owner_ex em_fowner;
+#endif
+
+	(void) which;
+
 	LOAD_ARGS(funcinst, varargs, 2,
 		  int32_t, fd,
 		  int32_t, cmd);
 
-	(void) which;
+	sys_cmd = convert_fcntl_cmd(args.cmd);
+	if (sys_cmd < 0) {
+		return -EM_EINVAL;
+	}
 
-	/* TODO: implement */
-	(void) args;
+	/* TODO: this can possibly be optimized for linux */
 
-	return -EM_EINVAL;
+	switch (args.cmd) {
+	case EM_F_SETLK:
+	case EM_F_SETLKW:
+	case EM_F_GETLK:
+	case EM_F_OFD_SETLK:
+	case EM_F_OFD_SETLKW:
+	case EM_F_OFD_GETLK:
+	case EM_F_GETOWN_EX:
+	case EM_F_SETOWN_EX:
+	case EM_F_DUPFD:
+	case EM_F_DUPFD_CLOEXEC:
+	case EM_F_SETFD:
+	case EM_F_SETFL:
+	case EM_F_SETOWN:
+	case EM_F_SETSIG:
+	case EM_F_SETLEASE:
+	case EM_F_NOTIFY:
+		if (_wasmjit_emscripten_copy_from_user(funcinst, &em_arg,
+						       varargs + 8, 4)) {
+			return -EM_EFAULT;
+		}
+		em_arg = uint32_t_swap_bytes(em_arg);
+	default:
+		break;
+	}
+
+	switch (args.cmd) {
+	case EM_F_SETLK:
+	case EM_F_SETLKW:
+	case EM_F_GETLK:
+	case EM_F_OFD_SETLK:
+	case EM_F_OFD_SETLKW:
+	case EM_F_OFD_GETLK:
+	case EM_F_GETOWN_EX:
+	case EM_F_SETOWN_EX: {
+		/* these are passing a pointer */
+
+		switch (args.cmd) {
+		case EM_F_SETLK:
+		case EM_F_SETLKW:
+		case EM_F_OFD_SETLK:
+		case EM_F_OFD_SETLKW: {
+			if (_wasmjit_emscripten_copy_from_user
+			    (funcinst, &em_flock_v, em_arg,
+			     sizeof(struct em_flock))) {
+				return -EM_EFAULT;
+			}
+
+			em_flock_v.l_type = uint16_t_swap_bytes(em_flock_v.l_type);
+			em_flock_v.l_whence = uint16_t_swap_bytes(em_flock_v.l_whence);
+			em_flock_v.l_start = uint32_t_swap_bytes(em_flock_v.l_start);
+			em_flock_v.l_len = uint32_t_swap_bytes(em_flock_v.l_len);
+			em_flock_v.l_pid = uint32_t_swap_bytes(em_flock_v.l_pid);
+
+			switch (em_flock_v.l_type) {
+			case EM_F_RDLCK: flock_v.l_type = F_RDLCK; break;
+			case EM_F_WRLCK: flock_v.l_type = F_WRLCK; break;
+			case EM_F_UNLCK: flock_v.l_type = F_UNLCK; break;
+			default: return -EM_EINVAL;
+			}
+
+			switch (em_flock_v.l_whence) {
+			case EM_SEEK_SET: flock_v.l_whence = SEEK_SET; break;
+			case EM_SEEK_CUR: flock_v.l_whence = SEEK_CUR; break;
+			case EM_SEEK_END: flock_v.l_whence = SEEK_END; break;
+			default: return -EM_EINVAL;
+			}
+
+			flock_v.l_start = em_flock_v.l_start;
+			flock_v.l_len = em_flock_v.l_len;
+			flock_v.l_pid = em_flock_v.l_pid;
+
+			sys_arg = (uintptr_t) &flock_v;
+
+			break;
+		}
+		case EM_F_GETLK:
+		case EM_F_OFD_GETLK:
+			if (!_wasmjit_emscripten_check_range
+			    (funcinst, em_arg,
+			     sizeof(struct em_flock))) {
+				return -EM_EFAULT;
+			}
+
+			sys_arg = (uintptr_t) &flock_v;
+
+			break;
+
+#ifdef F_SETOWN_EX
+		case EM_F_SETOWN_EX:
+			if (_wasmjit_emscripten_copy_from_user
+			    (funcinst, &em_fowner, em_arg,
+			     sizeof(struct em_f_owner_ex))) {
+				return -EM_EFAULT;
+			}
+
+			em_fowner.type = uint32_t_swap_bytes(em_fowner.type);
+			em_fowner.pid = uint32_t_swap_bytes(em_fowner.pid);
+
+			switch (em_fowner.type) {
+			case EM_F_OWNER_TID: fowner.type = F_OWNER_TID; break;
+			case EM_F_OWNER_PID: fowner.type = F_OWNER_PID; break;
+			case EM_F_OWNER_PGRP: fowner.type = F_OWNER_PGRP; break;
+			default: return -EM_EINVAL;
+			}
+
+			fowner.pid = em_fowner.pid;
+
+			sys_arg = (uintptr_t) &fowner;
+
+			break;
+#endif
+#if F_GETOWN_EX
+		case EM_F_GETOWN_EX:
+			if (!_wasmjit_emscripten_check_range
+			    (funcinst, em_arg,
+			     sizeof(struct em_f_owner_ex))) {
+				return -EM_EFAULT;
+			}
+
+			sys_arg = (uintptr_t) &fowner;
+
+			break;
+#endif
+		default:
+			assert(0);
+			__builtin_unreachable();
+			break;
+		}
+
+		break;
+	}
+	case EM_F_SETFD: {
+		sys_arg = 0;
+		/* only FD_CLOEXEC is supported */
+		if (em_arg & ~(uint32_t)EM_FD_CLOEXEC) {
+			return -EM_EINVAL;
+		}
+		if (EM_FD_CLOEXEC & em_arg) {
+			sys_arg |= FD_CLOEXEC;
+		}
+		break;
+	}
+	case EM_F_SETSIG: {
+		sys_arg = convert_signal(em_arg);
+		if (sys_arg < 0) {
+			return -EM_EINVAL;
+		}
+		break;
+	}
+	case EM_F_SETLEASE: {
+		switch (em_arg) {
+		case EM_F_RDLCK: sys_arg = F_RDLCK; break;
+		case EM_F_WRLCK: sys_arg = F_WRLCK; break;
+		case EM_F_UNLCK: sys_arg = F_UNLCK; break;
+		default: return -EM_EINVAL;
+		}
+		break;
+	}
+	case EM_F_NOTIFY: {
+		/* TODO: implement */
+		return -EM_EINVAL;
+		break;
+	}
+	case EM_F_SETFL:
+	case EM_F_DUPFD:
+	case EM_F_DUPFD_CLOEXEC:
+	case EM_F_SETOWN:
+		sys_arg = em_arg;
+		break;
+	case EM_F_GETFD:
+	case EM_F_GETFL:
+	case EM_F_GETOWN:
+	case EM_F_GETSIG:
+	case EM_F_GETLEASE:
+	case EM_F_GETPIPE_SZ:
+		/* these don't take an argument */
+		sys_arg = 0;
+		break;
+	default:
+		assert(0);
+		__builtin_unreachable();
+		break;
+	}
+
+	rret = sys_fcntl(args.fd, sys_cmd, sys_arg);
+	if (rret >= 0) {
+		char *base;
+
+		switch (args.cmd) {
+		case EM_F_GETFD: {
+			if (rret & ~(long)FD_CLOEXEC) {
+				rret = -EINVAL;
+			} else {
+				long newrret = 0;
+				if (rret & FD_CLOEXEC) {
+					newrret |= EM_FD_CLOEXEC;
+				}
+				rret = newrret;
+			}
+			break;
+		}
+		case EM_F_GETSIG:
+			rret = back_convert_signal(rret);
+			if (rret < 0) {
+				rret = -EINVAL;
+			}
+			break;
+		case EM_F_GETLEASE:
+			switch (rret) {
+			case F_RDLCK: rret = EM_F_RDLCK; break;
+			case F_WRLCK: rret = EM_F_WRLCK; break;
+			case F_UNLCK: rret = EM_F_UNLCK; break;
+			default:
+				rret = -EINVAL;
+			}
+			break;
+		case EM_F_GETLK:
+		case EM_F_OFD_GETLK:
+			switch (flock_v.l_type) {
+			case F_RDLCK: em_flock_v.l_type = EM_F_RDLCK; break;
+			case F_WRLCK: em_flock_v.l_type = EM_F_WRLCK; break;
+			case F_UNLCK: em_flock_v.l_type = EM_F_UNLCK; break;
+			default:
+				/* this should only happen if kernel is bugging */
+				wasmjit_emscripten_internal_abort("Bad fcntl call");
+			}
+
+			switch (flock_v.l_whence) {
+			case SEEK_SET: em_flock_v.l_whence = EM_SEEK_SET; break;
+			case SEEK_CUR: em_flock_v.l_whence = EM_SEEK_CUR; break;
+			case SEEK_END: em_flock_v.l_whence = EM_SEEK_END; break;
+			default:
+				/* this should only happen if kernel is bugging */
+				wasmjit_emscripten_internal_abort("Bad fcntl call");
+			}
+
+			em_flock_v.l_type = uint16_t_swap_bytes(em_flock_v.l_type);
+			em_flock_v.l_whence = uint16_t_swap_bytes(em_flock_v.l_whence);
+			em_flock_v.l_start = uint32_t_swap_bytes(em_flock_v.l_start);
+			em_flock_v.l_len = uint32_t_swap_bytes(em_flock_v.l_len);
+			em_flock_v.l_pid = uint32_t_swap_bytes(em_flock_v.l_pid);
+
+			base = wasmjit_emscripten_get_base_address(funcinst);
+			memcpy(base + em_arg, &em_flock_v, sizeof(em_flock_v));
+
+			break;
+#ifdef F_GETOWN_EX
+		case EM_F_GETOWN_EX:
+			switch (fowner.type) {
+			case F_OWNER_TID: em_fowner.type = EM_F_OWNER_TID; break;
+			case F_OWNER_PID: em_fowner.type = EM_F_OWNER_PID; break;
+			case F_OWNER_PGRP: em_fowner.type = EM_F_OWNER_PGRP; break;
+			default:
+				/* this should only happen if kernel is bugging */
+				wasmjit_emscripten_internal_abort("Bad fcntl call");
+			}
+
+			em_fowner.pid = fowner.pid;
+
+			em_fowner.type = uint32_t_swap_bytes(em_fowner.type);
+			em_fowner.pid = uint32_t_swap_bytes(em_fowner.pid);
+
+			base = wasmjit_emscripten_get_base_address(funcinst);
+			memcpy(base + em_arg, &em_fowner, sizeof(em_fowner));
+
+			break;
+#endif
+		default:
+			break;
+		}
+	}
+
+	return check_ret(rret);
 }
 
 /* chdir */
