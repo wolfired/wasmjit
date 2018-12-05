@@ -3772,11 +3772,11 @@ uint32_t wasmjit_emscripten____syscall221(uint32_t which, uint32_t varargs,
 	struct em_f_owner_ex em_fowner;
 #endif
 
-	(void) which;
-
 	LOAD_ARGS(funcinst, varargs, 2,
 		  int32_t, fd,
 		  int32_t, cmd);
+
+	(void) which;
 
 	sys_cmd = convert_fcntl_cmd(args.cmd);
 	if (sys_cmd < 0) {
