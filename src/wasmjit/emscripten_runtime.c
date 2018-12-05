@@ -7317,32 +7317,46 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
 					  struct FuncInst *funcinst)
 {
 	char *base;
-	struct timeval tv;
-	struct timezone tz;
+	struct timeval tv, *tvp;
+	struct timezone tz, *tzp;
 	long rret;
 	wasmjit_signal_block_ctx set;
 	uint32_t ret;
 
-	if (!_wasmjit_emscripten_check_range(funcinst, emtv, sizeof(struct em_timeval)))
-		return -EM_EFAULT;
+	if (emtv) {
+		if (!_wasmjit_emscripten_check_range(funcinst, emtv, sizeof(struct em_timeval)))
+			return -EM_EFAULT;
+		tvp = &tv;
+	} else {
+		tvp = NULL;
+	}
 
-	if (!_wasmjit_emscripten_check_range(funcinst, emtz, sizeof(struct em_timezone)))
-		return -EM_EFAULT;
+	if (emtz) {
+		if (!_wasmjit_emscripten_check_range(funcinst, emtz, sizeof(struct em_timezone)))
+			return -EM_EFAULT;
+		tzp = &tz;
+	} else {
+		tzp = NULL;
+	}
 
 	base = wasmjit_emscripten_get_base_address(funcinst);
 
 	_wasmjit_block_signals(&set);
 
-	rret = sys_gettimeofday(&tv, &tz);
+	rret = sys_gettimeofday(tvp, tzp);
 	if (rret < 0) {
 		goto err;
-	} else {
-		struct em_timezone emtzl;
+	}
 
+	if (tvp) {
 		if (!write_timeval(base + emtv, &tv)) {
 			rret = -EM_EOVERFLOW;
 			goto err;
 		}
+	}
+
+	if (tzp) {
+		struct em_timezone emtzl;
 
 #if __INT_WIDTH__ > 32
 		if (tz.tz_minuteswest > INT32_MAX ||
