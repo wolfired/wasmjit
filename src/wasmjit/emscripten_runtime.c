@@ -4853,8 +4853,6 @@ static int32_t write_stat(char *base,
 	uint32_t scratch;
 	char *base2 = base + dest_addr;
 
-	if (OVERFLOWS(st->st_ino))
-		return -EM_EOVERFLOW;
 	scratch = uint32_t_swap_bytes(st->st_ino);
 	memcpy(base2 + offsetof(struct em_stat64, __st_ino_truncated),
 	       &scratch, sizeof(scratch));
