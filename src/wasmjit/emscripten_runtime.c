@@ -6209,7 +6209,7 @@ uint32_t wasmjit_emscripten__clock_gettime(uint32_t clk_id, uint32_t tp,
 {
 	struct em_timespec emtspec;
 	struct timespec tspec;
-	int32_t ret;
+	long rret;
 	clockid_t sys_clk_id;
 
 #if IS_LINUX
@@ -6250,15 +6250,15 @@ uint32_t wasmjit_emscripten__clock_gettime(uint32_t clk_id, uint32_t tp,
 		p(TAI);
 #endif
 #undef p
-	default: ret = -EINVAL; goto err;
+	default: rret = -EINVAL; goto err;
 	}
 #endif
 
-	ret = sys_clock_gettime(sys_clk_id, &tspec);
-	if (ret >= 0) {
+	rret = sys_clock_gettime(sys_clk_id, &tspec);
+	if (rret >= 0) {
 		if (OVERFLOWS(tspec.tv_sec) ||
 		    OVERFLOWS(tspec.tv_nsec)) {
-			ret = -EOVERFLOW;
+			rret = -EOVERFLOW;
 			goto err;
 		}
 
@@ -6266,14 +6266,14 @@ uint32_t wasmjit_emscripten__clock_gettime(uint32_t clk_id, uint32_t tp,
 		emtspec.tv_nsec = uint32_t_swap_bytes(tspec.tv_nsec);
 
 		if (_wasmjit_emscripten_copy_to_user(funcinst, tp, &emtspec, sizeof(struct em_timespec))) {
-			ret = -EFAULT;
+			rret = -EFAULT;
 			goto err;
 		}
 
-		return ret;
+		return 0;
 	} else {
 	err:
-		wasmjit_emscripten____setErrNo(convert_errno(-ret), funcinst);
+		wasmjit_emscripten____setErrNo(convert_errno(-rret), funcinst);
 		return (int32_t) -1;
 	}
 }
