@@ -1002,14 +1002,81 @@ uint32_t wasmjit_emscripten____syscall4(uint32_t which, uint32_t varargs, struct
 	return check_ret(sys_write(args.fd, base + args.buf, args.count));
 }
 
+#define EM_FIONBIO 0x5421
+#define EM_FIOASYNC 0x5452
+
+static int convert_ioctl_request(uint32_t request) {
+	switch (request) {
+	case EM_FIONBIO: return FIONBIO;
+	case EM_FIOASYNC: return FIOASYNC;
+	default: return -1;
+	}
+}
+
 /* ioctl */
 uint32_t wasmjit_emscripten____syscall54(uint32_t which, uint32_t varargs, struct FuncInst *funcinst)
 {
-	(void)funcinst;
-	/* TODO: need to define non-no filesystem case */
-	(void)which;
-	(void)varargs;
-	return 0;
+	char *base;
+	int sys_request;
+	wasmjit_signal_block_ctx set;
+	long rret;
+
+	LOAD_ARGS(funcinst, varargs, 2,
+		  int32_t, fd,
+		  uint32_t, request);
+
+	(void) which;
+
+	_wasmjit_block_signals(&set);
+
+	sys_request = convert_ioctl_request(args.request);
+	if (sys_request < 0) {
+		rret = -EINVAL;
+		goto err;
+	}
+
+	base = wasmjit_emscripten_get_base_address(funcinst);
+
+	switch (args.request) {
+	case EM_FIOASYNC:
+	case EM_FIONBIO: {
+		int sys_opt;
+		uint32_t optp;
+		em_int opt;
+
+		if (_wasmjit_emscripten_copy_from_user(funcinst, &optp, varargs + 8, 4)) {
+			rret = -EFAULT;
+			goto err;
+		}
+
+		optp = int32_t_swap_bytes(optp);
+
+		if (_wasmjit_emscripten_copy_from_user(funcinst, &opt, optp, 4)) {
+			rret = -EFAULT;
+			goto err;
+		}
+		opt = int32_t_swap_bytes(opt);
+		sys_opt = opt;
+
+		rret = sys_ioctl(args.fd, sys_request, (uintptr_t) &sys_opt);
+
+		if (rret >= 0) {
+			opt = sys_opt;
+			opt = int32_t_swap_bytes(opt);
+			memcpy(base + optp, &opt, 4);
+		}
+
+		break;
+	}
+	default:
+		rret = -EINVAL;
+		break;
+	}
+
+ err:
+	_wasmjit_unblock_signals(&set);
+
+	return rret;
 }
 
 /* close */
