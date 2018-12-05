@@ -1082,8 +1082,10 @@ uint32_t wasmjit_emscripten____syscall54(uint32_t which, uint32_t varargs, struc
 /* close */
 uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct FuncInst *funcinst)
 {
-	wasmjit_signal_block_ctx set;
 	long closedret;
+#if !IS_LINUX
+	wasmjit_signal_block_ctx set;
+#endif
 
 	/* TODO: need to define non-no filesystem case */
 	LOAD_ARGS(funcinst, varargs, 1,
@@ -1091,9 +1093,9 @@ uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct
 
 	(void)which;
 
+#if !IS_LINUX
 	_wasmjit_block_signals(&set);
 
-#if !IS_LINUX
 	{
 		struct EmscriptenContext *ctx;
 		uint32_t fds;
@@ -1126,8 +1128,8 @@ uint32_t wasmjit_emscripten____syscall6(uint32_t which, uint32_t varargs, struct
 
 #if !IS_LINUX
  out:
-#endif
 	_wasmjit_unblock_signals(&set);
+#endif
 
 	return check_ret(closedret);
 }
