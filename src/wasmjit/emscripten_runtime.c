@@ -4857,23 +4857,24 @@ static int32_t write_stat(char *base,
 	memcpy(base2 + offsetof(struct em_stat64, __st_ino_truncated),
 	       &scratch, sizeof(scratch));
 
-#define SETST(__e)						\
-	if (OVERFLOWS(st->st_ ## __e))				\
+#define SETST(__e, __check_overflow)				\
+	if ((__check_overflow) && OVERFLOWS(st->st_ ## __e))	\
 		return -EM_EOVERFLOW;				\
 	scratch = uint32_t_swap_bytes(st->st_ ## __e);		\
 	memcpy(base2 + offsetof(struct em_stat64, st_ ## __e),	\
 	       &scratch, sizeof(scratch))
 
-	SETST(dev);
-	SETST(mode);
-	SETST(nlink);
-	SETST(uid);
-	SETST(gid);
-	SETST(rdev);
-	SETST(size);
-	SETST(blksize);
-	SETST(blocks);
-	SETST(ino);
+	SETST(dev, 1);
+	SETST(mode, 1);
+	SETST(nlink, 1);
+	SETST(uid, 1);
+	SETST(gid, 1);
+	SETST(rdev, 1);
+	SETST(blksize, 1);
+	SETST(blocks, 1);
+
+	SETST(size, 0);
+	SETST(ino, 0);
 
 #undef SETST
 
