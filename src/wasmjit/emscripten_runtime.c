@@ -4873,6 +4873,8 @@ static int32_t write_stat(char *base,
 	SETST(blksize, 1);
 	SETST(blocks, 1);
 
+	/* XXX: don't check overflow, since they can normally be > 32-bits.
+	   fix emscripten to make these 64-bits */
 	SETST(size, 0);
 	SETST(ino, 0);
 
@@ -5292,7 +5294,7 @@ uint32_t wasmjit_emscripten____syscall220(uint32_t which, uint32_t varargs,
 		    /* we have to remove this because emscripten goofed and made its
 		       d_off not unconditionally 64-bit, like getdents64 requires.
 		       in practice, this means telldir() in the user program will be totally broken
-		       TODO: fix this upstream
+		       XXX: fix this upstream
 		    */
 		    /* OVERFLOWS(kdirent->d_ino) || */
 		    /* OVERFLOWS(curoff) || */
