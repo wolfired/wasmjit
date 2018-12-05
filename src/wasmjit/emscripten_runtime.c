@@ -7350,7 +7350,7 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
 
 	if (tvp) {
 		if (!write_timeval(base + emtv, &tv)) {
-			rret = -EM_EOVERFLOW;
+			rret = -EOVERFLOW;
 			goto err;
 		}
 	}
@@ -7363,7 +7363,7 @@ uint32_t wasmjit_emscripten__gettimeofday(uint32_t emtv, uint32_t emtz,
 		    tz.tz_minuteswest < INT32_MIN ||
 		    tz.tz_dsttime > INT32_MAX ||
 		    tz.tz_dsttime < INT32_MIN) {
-			rret = -EM_EOVERFLOW;
+			rret = -EOVERFLOW;
 			goto err;
 		}
 #endif
