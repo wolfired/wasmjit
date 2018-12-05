@@ -9004,7 +9004,12 @@ uint32_t wasmjit_emscripten__waitpid(uint32_t pid, uint32_t status, uint32_t opt
 		memcpy(base + status, &status_v, sizeof(status_v));
 	}
 
-	ret = 0;
+	if (OVERFLOWS(rret)) {
+		errno = EOVERFLOW;
+		goto err;
+	}
+
+	ret = rret;
 
 	if (0) {
 	err:
