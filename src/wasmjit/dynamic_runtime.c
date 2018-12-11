@@ -35,46 +35,33 @@
 #include <linux/mm.h>
 #include <linux/sched/task_stack.h>
 
-void *wasmjit_map_code_segment(size_t code_size)
-{
-	return __vmalloc(code_size, GFP_KERNEL, PAGE_KERNEL_EXEC);
+void *wasmjit_map_code_segment(size_t code_size) { return __vmalloc(code_size, GFP_KERNEL, PAGE_KERNEL_EXEC); }
+
+int wasmjit_mark_code_segment_executable(void *code, size_t code_size) {
+    /* TODO: mess with pte a la mprotect_fixup */
+    (void)code;
+    (void)code_size;
+    return 1;
 }
 
-int wasmjit_mark_code_segment_executable(void *code, size_t code_size)
-{
-	/* TODO: mess with pte a la mprotect_fixup */
-	(void)code;
-	(void)code_size;
-	return 1;
+int wasmjit_unmap_code_segment(void *code, size_t code_size) {
+    (void)code_size;
+    vfree(code);
+    return 1;
 }
 
-int wasmjit_unmap_code_segment(void *code, size_t code_size)
-{
-	(void)code_size;
-	vfree(code);
-	return 1;
+wasmjit_thread_state *wasmjit_get_jmp_buf(void) { return wasmjit_get_ktls()->jmp_buf; }
+
+int wasmjit_set_jmp_buf(wasmjit_thread_state *jmpbuf) {
+    wasmjit_get_ktls()->jmp_buf = jmpbuf;
+    return 1;
 }
 
-wasmjit_thread_state *wasmjit_get_jmp_buf(void)
-{
-	return wasmjit_get_ktls()->jmp_buf;
-}
+void *wasmjit_stack_top(void) { return wasmjit_get_ktls()->stack_top; }
 
-int wasmjit_set_jmp_buf(wasmjit_thread_state *jmpbuf)
-{
-	wasmjit_get_ktls()->jmp_buf = jmpbuf;
-	return 1;
-}
-
-void *wasmjit_stack_top(void)
-{
-	return wasmjit_get_ktls()->stack_top;
-}
-
-int wasmjit_set_stack_top(void *stack_top)
-{
-	wasmjit_get_ktls()->stack_top = stack_top;
-	return 1;
+int wasmjit_set_stack_top(void *stack_top) {
+    wasmjit_get_ktls()->stack_top = stack_top;
+    return 1;
 }
 
 #else
@@ -83,109 +70,77 @@ int wasmjit_set_stack_top(void *stack_top)
 
 #include <sys/mman.h>
 
-void *wasmjit_map_code_segment(size_t code_size)
-{
-	void *newcode;
-	newcode = mmap(NULL, code_size, PROT_READ | PROT_WRITE,
-		       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (newcode == MAP_FAILED)
-		return NULL;
-	return newcode;
+void *wasmjit_map_code_segment(size_t code_size) {
+    void *newcode;
+    newcode = mmap(NULL, code_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (newcode == MAP_FAILED)
+        return NULL;
+    return newcode;
 }
 
-int wasmjit_mark_code_segment_executable(void *code, size_t code_size)
-{
-	return !mprotect(code, code_size, PROT_READ | PROT_EXEC);
-}
+int wasmjit_mark_code_segment_executable(void *code, size_t code_size) { return !mprotect(code, code_size, PROT_READ | PROT_EXEC); }
 
-
-int wasmjit_unmap_code_segment(void *code, size_t code_size)
-{
-	return !munmap(code, code_size);
-}
+int wasmjit_unmap_code_segment(void *code, size_t code_size) { return !munmap(code, code_size); }
 
 wasmjit_tls_key_t jmp_buf_key;
 
-__attribute__((constructor))
-static void _init_jmp_buf(void)
-{
-	wasmjit_init_tls_key(&jmp_buf_key, NULL);
+__attribute__((constructor)) static void _init_jmp_buf(void) { wasmjit_init_tls_key(&jmp_buf_key, NULL); }
+
+wasmjit_thread_state *wasmjit_get_jmp_buf(void) {
+    wasmjit_thread_state *toret;
+    int ret;
+    ret = wasmjit_get_tls_key(jmp_buf_key, &toret);
+    if (!ret)
+        return NULL;
+    return toret;
 }
 
-wasmjit_thread_state *wasmjit_get_jmp_buf(void)
-{
-	wasmjit_thread_state *toret;
-	int ret;
-	ret = wasmjit_get_tls_key(jmp_buf_key, &toret);
-	if (!ret) return NULL;
-	return toret;
-}
-
-int wasmjit_set_jmp_buf(wasmjit_thread_state *jmpbuf)
-{
-	return wasmjit_set_tls_key(jmp_buf_key, jmpbuf);
-}
+int wasmjit_set_jmp_buf(wasmjit_thread_state *jmpbuf) { return wasmjit_set_tls_key(jmp_buf_key, jmpbuf); }
 
 wasmjit_tls_key_t stack_top_key;
 
-__attribute__((constructor))
-static void _init_stack_top(void)
-{
-	wasmjit_init_tls_key(&stack_top_key, NULL);
+__attribute__((constructor)) static void _init_stack_top(void) { wasmjit_init_tls_key(&stack_top_key, NULL); }
+
+void *wasmjit_stack_top(void) {
+    void *toret;
+    int ret;
+    ret = wasmjit_get_tls_key(stack_top_key, &toret);
+    if (!ret)
+        return NULL;
+    return toret;
 }
 
-void *wasmjit_stack_top(void)
-{
-	void *toret;
-	int ret;
-	ret = wasmjit_get_tls_key(stack_top_key, &toret);
-	if (!ret) return NULL;
-	return toret;
-}
-
-int wasmjit_set_stack_top(void *stack_top)
-{
-	return wasmjit_set_tls_key(stack_top_key, stack_top);
-}
+int wasmjit_set_stack_top(void *stack_top) { return wasmjit_set_tls_key(stack_top_key, stack_top); }
 
 #endif
 
-__attribute__((noreturn))
-void wasmjit_trap(int reason)
-{
-	assert(reason);
-	wasmjit_restore_thread_state(*wasmjit_get_jmp_buf(), (reason << 8));
+__attribute__((noreturn)) void wasmjit_trap(int reason) {
+    assert(reason);
+    wasmjit_restore_thread_state(*wasmjit_get_jmp_buf(), (reason << 8));
 }
 
-__attribute__((noreturn))
-void wasmjit_exit(int status)
-{
-	wasmjit_restore_thread_state(*wasmjit_get_jmp_buf(), (WASMJIT_TRAP_EXIT << 8) | status);
-}
+__attribute__((noreturn)) void wasmjit_exit(int status) { wasmjit_restore_thread_state(*wasmjit_get_jmp_buf(), (WASMJIT_TRAP_EXIT << 8) | status); }
 
-int wasmjit_invoke_function(struct FuncInst *funcinst,
-			    union ValueUnion *values,
-			    union ValueUnion *out)
-{
-	union ValueUnion lout;
-	int ret;
-	wasmjit_thread_state jmpbuf;
+int wasmjit_invoke_function(struct FuncInst *funcinst, union ValueUnion *values, union ValueUnion *out) {
+    union ValueUnion lout;
+    int ret;
+    wasmjit_thread_state jmpbuf;
 
-	if (wasmjit_get_jmp_buf()) {
-		lout = wasmjit_invoke_function_raw(funcinst, values);
-		if (out)
-			*out = lout;
-		ret = 0;
-	} else {
-		wasmjit_set_jmp_buf(&jmpbuf);
-		if (!(ret = wasmjit_save_thread_state(jmpbuf))) {
-			lout = wasmjit_invoke_function_raw(funcinst, values);
-			if (out)
-				*out = lout;
-			ret = 0;
-		}
-		wasmjit_set_jmp_buf(NULL);
-	}
+    if (wasmjit_get_jmp_buf()) {
+        lout = wasmjit_invoke_function_raw(funcinst, values);
+        if (out)
+            *out = lout;
+        ret = 0;
+    } else {
+        wasmjit_set_jmp_buf(&jmpbuf);
+        if (!(ret = wasmjit_save_thread_state(jmpbuf))) {
+            lout = wasmjit_invoke_function_raw(funcinst, values);
+            if (out)
+                *out = lout;
+            ret = 0;
+        }
+        wasmjit_set_jmp_buf(NULL);
+    }
 
-	return ret;
+    return ret;
 }

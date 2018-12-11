@@ -40,31 +40,21 @@ extern "C" {
 
 struct WasmJITHigh {
 #ifdef WASMJIT_CAN_USE_DEVICE
-	int fd;
+    int fd;
 #endif
-	size_t n_modules;
-	struct NamedModule *modules;
-	char error_buffer[256];
-	struct ModuleInst *emscripten_asm_module;
-	struct ModuleInst *emscripten_env_module;
+    size_t n_modules;
+    struct NamedModule *modules;
+    char error_buffer[256];
+    struct ModuleInst *emscripten_asm_module;
+    struct ModuleInst *emscripten_env_module;
 };
 
 #define WASMJIT_HIGH_INSTANTIATE_EMSCRIPTEN_RUNTIME_FLAGS_NO_TABLE 1
 
 int wasmjit_high_init(struct WasmJITHigh *self);
-int wasmjit_high_instantiate(struct WasmJITHigh *self,
-			     const char *filename,
-			     const char *module_name,
-			     uint32_t flags);
-int wasmjit_high_instantiate_emscripten_runtime(struct WasmJITHigh *self,
-						uint32_t static_bump,
-						size_t tablemin,
-						size_t tablemax,
-						uint32_t flags);
-int wasmjit_high_emscripten_invoke_main(struct WasmJITHigh *self,
-					const char *module_name,
-					int argc, char **argv, char **envp,
-					uint32_t flags);
+int wasmjit_high_instantiate(struct WasmJITHigh *self, const char *filename, const char *module_name, uint32_t flags);
+int wasmjit_high_instantiate_emscripten_runtime(struct WasmJITHigh *self, uint32_t static_bump, size_t tablemin, size_t tablemax, uint32_t flags);
+int wasmjit_high_emscripten_invoke_main(struct WasmJITHigh *self, const char *module_name, int argc, char **argv, char **envp, uint32_t flags);
 void wasmjit_high_close(struct WasmJITHigh *self);
 int wasmjit_high_error_message(struct WasmJITHigh *self, char *buf, size_t buf_size);
 

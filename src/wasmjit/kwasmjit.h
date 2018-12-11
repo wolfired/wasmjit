@@ -46,34 +46,34 @@ extern "C" {
 #define KWASMJIT_MAGIC 0xCC
 
 struct kwasmjit_instantiate_args {
-	uint32_t version;
-	const char *file_name;
-	const char *module_name;
-	uint32_t flags;
+    uint32_t version;
+    const char *file_name;
+    const char *module_name;
+    uint32_t flags;
 };
 
 #define KWASMJIT_INSTANTIATE_EMSCRIPTEN_RUNTIME_FLAGS_NO_TABLE 1
 
 struct kwasmjit_instantiate_emscripten_runtime_args {
-	uint32_t version;
-	uint32_t static_bump;
-	size_t tablemin, tablemax;
-	uint32_t flags;
+    uint32_t version;
+    uint32_t static_bump;
+    size_t tablemin, tablemax;
+    uint32_t flags;
 };
 
 struct kwasmjit_emscripten_invoke_main_args {
-	uint32_t version;
-	const char *module_name;
-	int argc;
-	char **argv;
-	char **envp;
-	uint32_t flags;
+    uint32_t version;
+    const char *module_name;
+    int argc;
+    char **argv;
+    char **envp;
+    uint32_t flags;
 };
 
 struct kwasmjit_error_message_args {
-	uint32_t version;
-	char *buffer;
-	size_t size;
+    uint32_t version;
+    char *buffer;
+    size_t size;
 };
 
 #define KWASMJIT_INSTANTIATE _IOW(KWASMJIT_MAGIC, 0, struct kwasmjit_instantiate_args)

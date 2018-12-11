@@ -25,18 +25,18 @@
 #ifndef __WASMJIT__EMSCRIPTEN_RUNTIME_H__
 #define __WASMJIT__EMSCRIPTEN_RUNTIME_H__
 
-#include <wasmjit/runtime.h>
-#include <wasmjit/util.h>
-#include <wasmjit/sys.h>
-#include <wasmjit/vector.h>
 #include <wasmjit/posix_sys.h>
+#include <wasmjit/runtime.h>
+#include <wasmjit/sys.h>
+#include <wasmjit/util.h>
+#include <wasmjit/vector.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 enum {
-	WASMJIT_EMSCRIPTEN_TOTAL_MEMORY = 16777216,
+    WASMJIT_EMSCRIPTEN_TOTAL_MEMORY = 16777216,
 };
 
 typedef uint32_t em_funcptr;
@@ -44,60 +44,61 @@ typedef int32_t em_int;
 typedef uint32_t em_ulong;
 typedef int32_t em_long;
 
-typedef struct { em_ulong __bits[128 / sizeof(em_long)]; } em_sigset_t;
+typedef struct {
+    em_ulong __bits[128 / sizeof(em_long)];
+} em_sigset_t;
 
 union em_sigaction_handler {
-	em_funcptr em_sa_handler;
-	em_funcptr em_sa_sigaction;
+    em_funcptr em_sa_handler;
+    em_funcptr em_sa_sigaction;
 };
 
 struct em_sigaction {
-        union em_sigaction_handler __sa_handler;
-        em_sigset_t sa_mask;
-        em_int sa_flags;
-        em_funcptr sa_restorer;
+    union em_sigaction_handler __sa_handler;
+    em_sigset_t sa_mask;
+    em_int sa_flags;
+    em_funcptr sa_restorer;
 };
 
-struct EmFILE {
-};
+struct EmFILE {};
 
 struct EmFile {
-	DIR *dirp;
+    DIR *dirp;
 };
 
 struct EmSem {
-	uint32_t user_addr;
-	sem_t *real_sem;
+    uint32_t user_addr;
+    sem_t *real_sem;
 };
 
 struct EmscriptenContext {
-	struct ModuleInst *asm_;
-	struct FuncInst *errno_location_inst;
-	char **environ;
-	int buildEnvironmentCalled;
-	struct FuncInst *malloc_inst;
-	struct FuncInst *free_inst;
-	DEFINE_ANON_VECTOR(struct EmFile *) fd_table;
-	/* NB: only used in kernel */
-	uint32_t gai_strerror_buffer;
-	uint32_t getenv_buffer;
-	uint32_t getgrent_buffer;
-	uint32_t getpwent_buffer;
-	uint32_t tmzone_buffer;
-	uint32_t *LLVM_SAVEDSTACKS;
-	size_t LLVM_SAVEDSTACKS_sz;
-	uint32_t tmtm_buffer;
-	DEFINE_ANON_VECTOR(struct EmSem) sem_table;
-	struct {
-		int is_sigaction;
-		union em_sigaction_handler handler;
-	} sig_handlers[sizeof(em_sigset_t) * CHAR_BIT];
-	DEFINE_ANON_VECTOR(void *) unfreed_pointers;
+    struct ModuleInst *asm_;
+    struct FuncInst *errno_location_inst;
+    char **environ;
+    int buildEnvironmentCalled;
+    struct FuncInst *malloc_inst;
+    struct FuncInst *free_inst;
+    DEFINE_ANON_VECTOR(struct EmFile *) fd_table;
+    /* NB: only used in kernel */
+    uint32_t gai_strerror_buffer;
+    uint32_t getenv_buffer;
+    uint32_t getgrent_buffer;
+    uint32_t getpwent_buffer;
+    uint32_t tmzone_buffer;
+    uint32_t *LLVM_SAVEDSTACKS;
+    size_t LLVM_SAVEDSTACKS_sz;
+    uint32_t tmtm_buffer;
+    DEFINE_ANON_VECTOR(struct EmSem) sem_table;
+    struct {
+        int is_sigaction;
+        union em_sigaction_handler handler;
+    } sig_handlers[sizeof(em_sigset_t) * CHAR_BIT];
+    DEFINE_ANON_VECTOR(void *) unfreed_pointers;
 };
 
 #define CTYPE_VALTYPE_I32 uint32_t
 #define CTYPE_VALTYPE_NULL void
-#define CTYPE(val) CTYPE_ ## val
+#define CTYPE(val) CTYPE_##val
 
 #define __PARAM(to, n, t) CTYPE(t)
 
@@ -108,11 +109,9 @@ struct EmscriptenContext {
 #define COMMA_4 ,
 #define COMMA_IF_NOT_EMPTY(_n) CAT(COMMA_, _n)
 
-#define DEFINE_WASM_FUNCTION(_name, _fptr, _output, _n, ...)		\
-	CTYPE(_output)  wasmjit_emscripten_ ## _name(__KMAP(_n, __PARAM, ##__VA_ARGS__) COMMA_IF_NOT_EMPTY(_n) struct FuncInst *);
+#define DEFINE_WASM_FUNCTION(_name, _fptr, _output, _n, ...) CTYPE(_output) wasmjit_emscripten_##_name(__KMAP(_n, __PARAM, ##__VA_ARGS__) COMMA_IF_NOT_EMPTY(_n) struct FuncInst *);
 
-#define DEFINE_WASM_START_FUNCTION(_name) \
-	void _name(struct FuncInst *);
+#define DEFINE_WASM_START_FUNCTION(_name) void _name(struct FuncInst *);
 
 #define START_MODULE()
 #define END_MODULE()
@@ -166,34 +165,23 @@ void wasmjit_emscripten_cleanup(struct ModuleInst *);
 void wasmjit_emscripten_internal_abort(const char *msg) __attribute__((noreturn));
 struct MemInst *wasmjit_emscripten_get_mem_inst(struct FuncInst *funcinst);
 
-
-int wasmjit_emscripten_init(struct EmscriptenContext *ctx,
-			    struct ModuleInst *asm_,
-			    struct FuncInst *errno_location_inst,
-			    struct FuncInst *malloc_inst,
-			    struct FuncInst *free_inst,
-			    char *envp[]);
+int wasmjit_emscripten_init(struct EmscriptenContext *ctx, struct ModuleInst *asm_, struct FuncInst *errno_location_inst, struct FuncInst *malloc_inst, struct FuncInst *free_inst, char *envp[]);
 
 int wasmjit_emscripten_build_environment(struct FuncInst *environ_constructor);
 
-int wasmjit_emscripten_invoke_main(struct MemInst *meminst,
-				   struct FuncInst *stack_alloc_inst,
-				   struct FuncInst *main_inst,
-				   int argc,
-				   char *argv[]);
+int wasmjit_emscripten_invoke_main(struct MemInst *meminst, struct FuncInst *stack_alloc_inst, struct FuncInst *main_inst, int argc, char *argv[]);
 
 struct WasmJITEmscriptenMemoryGlobals {
-	uint32_t __memory_base;
-	uint32_t __table_base;
-	uint32_t memoryBase;
-	uint32_t tempDoublePtr;
-	uint32_t DYNAMICTOP_PTR;
-	uint32_t STACKTOP;
-	uint32_t STACK_MAX;
+    uint32_t __memory_base;
+    uint32_t __table_base;
+    uint32_t memoryBase;
+    uint32_t tempDoublePtr;
+    uint32_t DYNAMICTOP_PTR;
+    uint32_t STACKTOP;
+    uint32_t STACK_MAX;
 };
 
-void wasmjit_emscripten_derive_memory_globals(uint32_t static_bump,
-					      struct WasmJITEmscriptenMemoryGlobals *out);
+void wasmjit_emscripten_derive_memory_globals(uint32_t static_bump, struct WasmJITEmscriptenMemoryGlobals *out);
 
 #ifdef __cplusplus
 }

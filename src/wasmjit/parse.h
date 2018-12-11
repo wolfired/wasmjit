@@ -34,13 +34,12 @@ extern "C" {
 #endif
 
 struct ParseState {
-	int eof;
-	const char *input;
-	size_t amt_left;
+    int eof;
+    const char *input;
+    size_t amt_left;
 };
 
-int read_module(struct ParseState *pstate, struct Module *module,
-		char *why, size_t why_size);
+int read_module(struct ParseState *pstate, struct Module *module, char *why, size_t why_size);
 
 int init_pstate(struct ParseState *pstate, const char *buf, size_t size);
 

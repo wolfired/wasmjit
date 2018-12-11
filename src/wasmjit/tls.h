@@ -25,8 +25,8 @@
 #ifndef __WASMJIT__TLS_H__
 #define __WASMJIT__TLS_H__
 
-#include <pthread.h>
 #include <errno.h>
+#include <pthread.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,25 +34,15 @@ extern "C" {
 
 typedef pthread_key_t wasmjit_tls_key_t;
 
-__attribute__((unused))
-static int wasmjit_init_tls_key(wasmjit_tls_key_t *pkey, void (*destr)(void *))
-{
-	return !pthread_key_create(pkey, destr);
+__attribute__((unused)) static int wasmjit_init_tls_key(wasmjit_tls_key_t *pkey, void (*destr)(void *)) { return !pthread_key_create(pkey, destr); }
+
+__attribute__((unused)) static int wasmjit_get_tls_key(wasmjit_tls_key_t key, void *newval) {
+    errno = 0;
+    *(void **)newval = pthread_getspecific(key);
+    return (*(void **)newval || !errno);
 }
 
-__attribute__((unused))
-static int wasmjit_get_tls_key(wasmjit_tls_key_t key, void *newval)
-{
-	errno = 0;
-	*(void **)newval = pthread_getspecific(key);
-	return (*(void **)newval || !errno);
-}
-
-__attribute__((unused))
-static int wasmjit_set_tls_key(wasmjit_tls_key_t key, void *val)
-{
-	return !pthread_setspecific(key, val);
-}
+__attribute__((unused)) static int wasmjit_set_tls_key(wasmjit_tls_key_t key, void *val) { return !pthread_setspecific(key, val); }
 
 #ifdef __cplusplus
 }

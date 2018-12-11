@@ -34,28 +34,28 @@ extern "C" {
 #endif
 
 struct ModuleTypes {
-	struct FuncType *functypes;
-	struct TableType *tabletypes;
-	struct MemoryType *memorytypes;
-	struct GlobalType *globaltypes;
+    struct FuncType *functypes;
+    struct TableType *tabletypes;
+    struct MemoryType *memorytypes;
+    struct GlobalType *globaltypes;
 };
 
 struct MemoryReferences {
-	size_t n_elts;
-	struct MemoryReferenceElt {
-		enum {
-			MEMREF_TYPE,
-			MEMREF_FUNC,
-			MEMREF_TABLE,
-			MEMREF_MEM,
-			MEMREF_GLOBAL,
-			MEMREF_RESOLVE_INDIRECT_CALL,
-			MEMREF_TRAP,
-			MEMREF_STACK_TOP,
-		} type;
-		size_t code_offset;
-		size_t idx;
-	} *elts;
+    size_t n_elts;
+    struct MemoryReferenceElt {
+        enum {
+            MEMREF_TYPE,
+            MEMREF_FUNC,
+            MEMREF_TABLE,
+            MEMREF_MEM,
+            MEMREF_GLOBAL,
+            MEMREF_RESOLVE_INDIRECT_CALL,
+            MEMREF_TRAP,
+            MEMREF_STACK_TOP,
+        } type;
+        size_t code_offset;
+        size_t idx;
+    } * elts;
 };
 
 #define WASMJIT_COMPILE_FLAG_INTEL_RETPOLINE 1
@@ -63,30 +63,14 @@ struct MemoryReferences {
 
 unsigned wasmjit_detect_retpoline_flags(void);
 
-char *wasmjit_compile_function(const struct FuncType *func_types,
-			       const struct ModuleTypes *module_types,
-			       const struct FuncType *type,
-			       const struct CodeSectionCode *code,
-			       struct MemoryReferences *memrefs,
-			       size_t *out_size,
-			       size_t *stack_usage,
-			       unsigned flags);
+char *wasmjit_compile_function(const struct FuncType *func_types, const struct ModuleTypes *module_types, const struct FuncType *type, const struct CodeSectionCode *code, struct MemoryReferences *memrefs, size_t *out_size, size_t *stack_usage,
+                               unsigned flags);
 
-char *wasmjit_compile_hostfunc(struct FuncType *type,
-			       void *hostfunc,
-			       void *funcinst_ptr,
-			       size_t *out_size,
-			       unsigned flags);
+char *wasmjit_compile_hostfunc(struct FuncType *type, void *hostfunc, void *funcinst_ptr, size_t *out_size, unsigned flags);
 
-char *wasmjit_compile_invoker(struct FuncType *type,
-			      void *compiled_code,
-			      size_t *out_size,
-			      unsigned flags);
+char *wasmjit_compile_invoker(struct FuncType *type, void *compiled_code, size_t *out_size, unsigned flags);
 
-char *wasmjit_compile_invoker_offset(struct FuncType *type,
-				     size_t *compiled_code_offset,
-				     size_t *out_size,
-				     unsigned flags);
+char *wasmjit_compile_invoker_offset(struct FuncType *type, size_t *compiled_code_offset, size_t *out_size, unsigned flags);
 
 #ifdef __cplusplus
 }

@@ -31,9 +31,7 @@
 extern "C" {
 #endif
 
-void *wasmjit_output_elf_relocatable(const char *module_name,
-                                     const struct Module *module,
-                                     size_t *outsize);
+void *wasmjit_output_elf_relocatable(const char *module_name, const struct Module *module, size_t *outsize);
 
 #ifdef __cplusplus
 }

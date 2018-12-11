@@ -36,27 +36,26 @@ extern "C" {
 #endif
 
 struct KernelThreadLocal {
-	wasmjit_thread_state *jmp_buf;
-	void *stack_top;
-	struct pt_regs regs;
-	struct MemInst *mem_inst;
+    wasmjit_thread_state *jmp_buf;
+    void *stack_top;
+    struct pt_regs regs;
+    struct MemInst *mem_inst;
 };
 
 static inline char *ptrptr(void) {
-	/* NB: use space below entry of kernel stack for our thread local info
-	   if task_pt_regs(current) does not point to the bottom of the stack,
-	   this will fail very badly. wasmjit_high_emscripten_invoke_main always
-	   restores the original value before returning, so while we in the system
-	   call it should be safe to reappropriate this space.
-	 */
-	return (char *)task_pt_regs(current) - sizeof(struct ThreadLocal *);
+    /* NB: use space below entry of kernel stack for our thread local info
+       if task_pt_regs(current) does not point to the bottom of the stack,
+       this will fail very badly. wasmjit_high_emscripten_invoke_main always
+       restores the original value before returning, so while we in the system
+       call it should be safe to reappropriate this space.
+     */
+    return (char *)task_pt_regs(current) - sizeof(struct ThreadLocal *);
 }
 
-static inline struct KernelThreadLocal *wasmjit_get_ktls(void)
-{
-	struct KernelThreadLocal *toret;
-	memcpy(&toret, ptrptr(), sizeof(toret));
-	return toret;
+static inline struct KernelThreadLocal *wasmjit_get_ktls(void) {
+    struct KernelThreadLocal *toret;
+    memcpy(&toret, ptrptr(), sizeof(toret));
+    return toret;
 }
 
 #ifdef __cplusplus

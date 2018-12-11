@@ -24,27 +24,25 @@
 
 #include <wasmjit/sys.h>
 
-int wasmjit_vector_set_size(void *elts_, size_t *n_elts, size_t new_n_elts,
-			    size_t elt_size)
-{
-	void **elts = (void **)elts_;
-	void *newstackelts;
-	size_t total_elt_size;
+int wasmjit_vector_set_size(void *elts_, size_t *n_elts, size_t new_n_elts, size_t elt_size) {
+    void **elts = (void **)elts_;
+    void *newstackelts;
+    size_t total_elt_size;
 
-	if (__builtin_umull_overflow(new_n_elts, elt_size, &total_elt_size)) {
-		goto error;
-	}
+    if (__builtin_umull_overflow(new_n_elts, elt_size, &total_elt_size)) {
+        goto error;
+    }
 
-	newstackelts = realloc(*elts, total_elt_size);
-	if (!newstackelts && total_elt_size)
-		goto error;
+    newstackelts = realloc(*elts, total_elt_size);
+    if (!newstackelts && total_elt_size)
+        goto error;
 
-	*elts = newstackelts;
-	*n_elts = new_n_elts;
+    *elts = newstackelts;
+    *n_elts = new_n_elts;
 
-	return 1;
+    return 1;
 
- error:
-	free(*elts);
-	return 0;
+error:
+    free(*elts);
+    return 0;
 }
