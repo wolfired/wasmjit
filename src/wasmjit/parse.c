@@ -32,6 +32,7 @@
 #define WASM_MAGIC 0x6d736100
 #define VERSION 0x1
 
+//段ID枚举(常量)
 enum {
     SECTION_ID_CUSTOM,
     SECTION_ID_TYPE,

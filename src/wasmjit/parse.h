@@ -33,14 +33,16 @@
 extern "C" {
 #endif
 
+//解析状态机
 struct ParseState {
     int eof;
     const char *input;
     size_t amt_left;
 };
 
+//读取模块
 int read_module(struct ParseState *pstate, struct Module *module, char *why, size_t why_size);
-
+//初始化解析状态机
 int init_pstate(struct ParseState *pstate, const char *buf, size_t size);
 
 #ifdef __cplusplus

@@ -31,6 +31,7 @@
 extern "C" {
 #endif
 
+//操作码枚举(常量)
 enum {
     /* Control Instructions */
     OPCODE_UNREACHABLE = 0x00,
@@ -222,6 +223,7 @@ enum {
     OPCODE_F64_REINTERPRET_I64 = 0xBF,
 };
 
+//值类型枚举(常量)
 enum {
     VALTYPE_NULL = 0x40,
     VALTYPE_I32 = 0x7f,
@@ -231,7 +233,6 @@ enum {
 };
 
 typedef uint8_t wasmjit_valtype_t;
-typedef uint8_t wasmjit_desc_t;
 
 __attribute__((unused)) static const char *wasmjit_valtype_repr(wasmjit_valtype_t valtype) {
     switch (valtype) {
@@ -256,6 +257,8 @@ enum {
     IMPORT_DESC_TYPE_GLOBAL,
     IMPORT_DESC_TYPE_LAST,
 };
+
+typedef uint8_t wasmjit_desc_t;
 
 __attribute__((unused)) static const char *wasmjit_desc_repr(wasmjit_desc_t desc) {
     switch (desc) {
@@ -308,6 +311,7 @@ struct MemoryType {
     struct Limits limits;
 };
 
+//指令
 struct Instr {
     uint8_t opcode;
     union {
@@ -363,17 +367,22 @@ struct Instr {
     } data;
 };
 
+//初始化指令
 void init_instruction(struct Instr *instr);
+//释放指令
 void free_instruction(struct Instr *instr);
+//释放全部指令
 void free_instructions(struct Instr *instructions, size_t n_instructions);
 
 #define TypeSectionType FuncType
 
+//类型段
 struct TypeSection {
     uint32_t n_types;
     struct TypeSectionType *types;
 };
 
+//导入段
 struct ImportSection {
     uint32_t n_imports;
     struct ImportSectionImport {
@@ -389,6 +398,7 @@ struct ImportSection {
     } * imports;
 };
 
+//函数段
 struct FunctionSection {
     uint32_t n_typeidxs;
     uint32_t *typeidxs;
@@ -396,11 +406,13 @@ struct FunctionSection {
 
 #define TableSectionTable TableType
 
+//表段
 struct TableSection {
     uint32_t n_tables;
     struct TableType *tables;
 };
 
+//内存段
 struct MemorySection {
     uint32_t n_memories;
     struct MemorySectionMemory {
@@ -408,6 +420,7 @@ struct MemorySection {
     } * memories;
 };
 
+//全局段
 struct GlobalSection {
     uint32_t n_globals;
     struct GlobalSectionGlobal {
@@ -417,6 +430,7 @@ struct GlobalSection {
     } * globals;
 };
 
+//导出段
 struct ExportSection {
     uint32_t n_exports;
     struct ExportSectionExport {
@@ -426,11 +440,13 @@ struct ExportSection {
     } * exports;
 };
 
+//入口段
 struct StartSection {
     int has_start;
     uint32_t funcidx;
 };
 
+//元素段
 struct ElementSection {
     uint32_t n_elements;
     struct ElementSectionElement {
@@ -442,6 +458,7 @@ struct ElementSection {
     } * elements;
 };
 
+//代码段
 struct CodeSection {
     uint32_t n_codes;
     struct CodeSectionCode {
@@ -456,6 +473,7 @@ struct CodeSection {
     } * codes;
 };
 
+//数据段
 struct DataSection {
     uint32_t n_datas;
     struct DataSectionData {
@@ -467,6 +485,7 @@ struct DataSection {
     } * datas;
 };
 
+//模块
 struct Module {
     struct TypeSection type_section;
     struct ImportSection import_section;
@@ -481,8 +500,10 @@ struct Module {
     struct DataSection data_section;
 };
 
+//初始化模块
 void wasmjit_init_module(struct Module *module);
-void wasmjit_free_module(struct Module *modules);
+//释放模块
+void wasmjit_free_module(struct Module *module);
 
 #ifdef __cplusplus
 }

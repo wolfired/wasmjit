@@ -55,6 +55,7 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 
+//获取栈顶
 static void *get_stack_top(void) {
     struct rlimit rlim;
     uintptr_t stack_bottom;
@@ -118,12 +119,14 @@ static void *get_stack_top(void) {
 
 #else
 
+//获取栈顶
 static void *get_stack_top(void) { return NULL; }
 
 #define MISSING_GET_STACK_TOP
 
 #endif
 
+//解析模块
 static int parse_module(const char *filename, struct Module *module) {
     char *buf = NULL;
     int ret, result;
@@ -154,6 +157,7 @@ static int parse_module(const char *filename, struct Module *module) {
     return result;
 }
 
+//提取模块
 static int dump_wasm_module(const char *filename) {
     uint32_t i;
     struct Module module;
@@ -352,6 +356,7 @@ static int run_emscripten_file(const char *filename, uint32_t static_bump, int h
     const char *msg;
     uint32_t flags = 0;
 
+	//获取栈顶
     stack_top = get_stack_top();
 
 #ifndef MISSING_GET_STACK_TOP
@@ -360,8 +365,10 @@ static int run_emscripten_file(const char *filename, uint32_t static_bump, int h
     }
 #endif
 
+	//设置栈顶
     wasmjit_set_stack_top(stack_top);
 
+	//初始化
     if (wasmjit_high_init(&high)) {
         msg = "failed to initialize";
         goto error;
@@ -371,16 +378,19 @@ static int run_emscripten_file(const char *filename, uint32_t static_bump, int h
     if (!has_table)
         flags |= WASMJIT_HIGH_INSTANTIATE_EMSCRIPTEN_RUNTIME_FLAGS_NO_TABLE;
 
+	//实例化emscripten运行时环境
     if (wasmjit_high_instantiate_emscripten_runtime(&high, static_bump, tablemin, tablemax, flags)) {
         msg = "failed to instantiate emscripten runtime";
         goto error;
     }
 
+	//实例化
     if (wasmjit_high_instantiate(&high, filename, "asm", 0)) {
         msg = "failed to instantiate module";
         goto error;
     }
 
+	//调用main
     ret = wasmjit_high_emscripten_invoke_main(&high, "asm", argc, argv, envp, 0);
 
     if (WASMJIT_IS_TRAP_ERROR(ret)) {
@@ -506,5 +516,5 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    return run_emscripten_file(filename, static_bump, has_table, tablemin, tablemax, argc - argc_options, &argv[argc_options], environ);
+return run_emscripten_file(filename, static_bump, has_table, tablemin, tablemax, argc - argc_options, &argv[argc_options], environ);
 }

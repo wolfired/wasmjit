@@ -31,9 +31,11 @@
 extern "C" {
 #endif
 
+//提取指令
 void dump_instruction(const struct Instr *instructions,
 		      int indent);
 
+//提取全部指令
 void dump_instructions(const struct Instr *instructions, size_t n_instructions,
 		       int indent);
 

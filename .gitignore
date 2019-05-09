@@ -1,3 +1,6 @@
 /.vscode
+/wasmjit.si4project
+/*.udb
+
 *.o
 /wasmjit

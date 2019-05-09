@@ -26,8 +26,10 @@
 
 #include <wasmjit/sys.h>
 
+//初始化指令
 void init_instruction(struct Instr *instr) { memset(instr, 0, sizeof(*instr)); }
 
+//释放指令
 void free_instruction(struct Instr *instr) {
     switch (instr->opcode) {
     case OPCODE_BLOCK:
@@ -56,6 +58,7 @@ void free_instruction(struct Instr *instr) {
     }
 }
 
+//释放全部指令
 void free_instructions(struct Instr *instructions, size_t n_instructions) {
     size_t i;
     for (i = 0; i < n_instructions; ++i) {
@@ -64,8 +67,10 @@ void free_instructions(struct Instr *instructions, size_t n_instructions) {
     free(instructions);
 }
 
+//初始化模块
 void wasmjit_init_module(struct Module *module) { memset(module, 0, sizeof(*module)); }
 
+//释放模块
 void wasmjit_free_module(struct Module *module) {
     if (module->type_section.types) {
         free(module->type_section.types);
